@@ -1,0 +1,12 @@
+node_modules
+dist
+.npm-cache
+.env
+.DS_Store
+*.log
+server/.env
+.env.*
+server/.env.*
+output
+server/dist
+extension/dist

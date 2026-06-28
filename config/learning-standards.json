@@ -1,0 +1,38 @@
+{
+  "LLM": {
+    "Canadian Constitutional Law": {
+      "coreTopics": [
+        "Constitution Act, 1867",
+        "Constitution Act, 1982",
+        "Division of Powers",
+        "Section 91",
+        "Section 92",
+        "POGG",
+        "Federal Paramountcy",
+        "Double Aspect Doctrine",
+        "Charter",
+        "Unwritten Constitutional Principles",
+        "Amending Formula",
+        "Judicial Review"
+      ],
+      "nextActionRules": [
+        {
+          "whenContentIncludes": ["Section 91"],
+          "prioritize": [
+            "Read Section 92",
+            "Compare federal powers and provincial powers",
+            "Study POGG"
+          ]
+        },
+        {
+          "whenContentIncludes": ["POGG"],
+          "prioritize": [
+            "Clarify emergency, gap, and national concern branches",
+            "Find leading cases on POGG",
+            "Compare POGG with federal paramountcy"
+          ]
+        }
+      ]
+    }
+  }
+}

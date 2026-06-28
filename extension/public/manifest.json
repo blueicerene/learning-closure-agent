@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Learning Closure Agent",
+  "version": "0.1.0",
+  "description": "Close a learning session with summary, knowledge cards, and next actions.",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": [
+    "http://localhost:3333/*",
+    "https://chatgpt.com/*",
+    "https://notebooklm.google.com/*",
+    "https://www.youtube.com/*"
+  ],
+  "action": {
+    "default_popup": "src/popup/popup.html",
+    "default_title": "Learning Closure Agent"
+  },
+  "background": {
+    "service_worker": "assets/background.js",
+    "type": "module"
+  }
+}

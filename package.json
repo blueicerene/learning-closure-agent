@@ -1,0 +1,14 @@
+{
+  "name": "learning-closure-agent",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "extension",
+    "server"
+  ],
+  "scripts": {
+    "dev:server": "npm --workspace server run dev",
+    "dev:extension": "npm --workspace extension run dev",
+    "build": "npm --workspaces run build"
+  }
+}
