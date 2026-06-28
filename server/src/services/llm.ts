@@ -46,11 +46,13 @@ For meaningful legal learning text, the closure must include:
 - classification metadata
 - learning standard usage metadata
 
-For Section 91 / Canadian federalism content specifically:
-- Include a summary explaining that Section 91 grants federal legislative powers and matters for division of powers.
-- Include knowledge cards for "Section 91" and "Division of Powers" when the text supports them.
-- Include unresolved questions about how Section 91 works with Section 92 and how POGG relates to Section 91.
-- Include next actions to read Section 92, compare federal powers with provincial powers, and study POGG / paramountcy / double aspect.
+Content focus rules:
+- The captured raw text is authoritative. Use learning standards, examples, and prior learning log only as context.
+- Do not make Section 91 the main subject unless the captured text itself makes Section 91 the main subject.
+- If the captured text is mainly about Section 92, the summary and knowledge cards must center Section 92; Section 91 may appear only as comparison or background.
+- If the captured text is mainly about Section 91, the summary and knowledge cards should center Section 91; Section 92 may appear as comparison or next reading.
+- If the captured text discusses Section 91 and Section 92 evenly, treat the closure as a comparison within division of powers.
+- learningStandardMatchedTopics may include broader standard topics, but the body of the closure must follow the captured content emphasis.
 - Use classification topic such as "Division of Powers" when appropriate.
 - Use knowledgeTypes such as "statute", "concept", "doctrine", and "comparison" when appropriate.
 
@@ -69,18 +71,18 @@ Return exactly this JSON shape using camelCase keys:
   "nextActions": [{ "action": "string", "reason": "string" }],
   "suggestedTags": ["string"],
   "learningStandardUsed": true,
-  "learningStandardMatchedTopics": ["Section 91", "Division of Powers"],
+  "learningStandardMatchedTopics": ["Relevant standard topic"],
   "classification": {
     "primaryGoalTrack": "LLM",
     "secondaryGoalTracks": ["Certificate"],
     "subject": "Canadian Constitutional Law",
     "relatedSubjects": ["NCA"],
     "topic": "Division of Powers",
-    "subtopics": ["Section 91", "Section 92", "POGG"],
+    "subtopics": ["Relevant subtopic"],
     "jurisdiction": "Canada",
     "knowledgeTypes": ["statute", "concept", "doctrine", "comparison"],
     "classificationConfidence": 0.88,
-    "classificationReason": "本次内容讨论 Section 91、联邦权力和权力分配，因此主要属于加拿大宪法。",
+    "classificationReason": "本次内容讨论明确的法律学习主题，因此归入用户选择的课程方向。",
     "reviewStatus": "needs_review"
   }
 }`;
@@ -232,22 +234,7 @@ function buildUserPrompt(
   standardContext: LearningStandardContext,
   learningLogSummary: string
 ): string {
-  const section91Guidance = isSection91Text(session.rawText)
-    ? `
-This input is meaningful Canadian constitutional law study content about Section 91.
-Do not return an empty or minimal closure.
-Required for this input:
-- summary must explain Section 91 as the federal legislative powers provision and connect it to Canadian federalism / division of powers
-- keyTakeaways must contain 2-4 items
-- knowledgeCards must include "Section 91" and "Division of Powers"
-- unresolvedQuestions must include how Section 91 should be understood with Section 92 and how POGG relates to Section 91
-- nextActions must include reading Section 92, comparing federal powers and provincial powers, and studying POGG / paramountcy / double aspect
-- classification.topic should be "Division of Powers" or a close equivalent
-- classification.knowledgeTypes should include relevant values from the allowed list, such as statute, concept, doctrine, comparison
-- learningStandardUsed must be true
-- learningStandardMatchedTopics must include matched learning standard topics such as Section 91 and Division of Powers when applicable
-`
-    : "";
+  const contentFocusGuidance = buildConstitutionalSectionGuidance(session.rawText);
 
   return `Goal:
 ${session.goal || ""}
@@ -295,11 +282,11 @@ Important:
 - Treat meaningful legal study text as worth closing.
 - Do not return empty arrays for meaningful legal text.
 - The next action should tell the learner exactly what to read, compare, ask, or review next.
-- When learning standard prioritized next actions exist, use them to shape nextActions.
+- When learning standard prioritized next actions exist, use them to shape nextActions only if they fit the captured content focus.
 - Use learning log only for continuity with the last session, not for scoring or progress tracking.
 - Use sessionId exactly as: ${session.id}
-${section91Guidance}
-${retrySparse ? "\nRetry instruction: the previous response was too empty. The raw text is meaningful study material. Produce a substantive closure now and follow the required Section 91 guidance if applicable." : ""}`;
+${contentFocusGuidance}
+${retrySparse ? "\nRetry instruction: the previous response was too empty. The raw text is meaningful study material. Produce a substantive closure now and follow the captured content focus guidance above." : ""}`;
 }
 
 function parseLlmJson(content: string): unknown {
@@ -472,7 +459,81 @@ function isMeaningfulStudyText(rawText: string): boolean {
   ].some((term) => text.includes(term));
 }
 
-function isSection91Text(rawText: string): boolean {
+type ConstitutionalSectionFocus = "section91" | "section92" | "comparison" | "none";
+
+function buildConstitutionalSectionGuidance(rawText: string): string {
+  const focus = getConstitutionalSectionFocus(rawText);
+
+  if (focus === "section92") {
+    return `
+Captured content focus: Section 92.
+Do not return an empty or minimal closure.
+Required for this input:
+- summary must explain Section 92 as the exclusive provincial legislative powers provision and connect it to Canadian federalism / division of powers
+- keyTakeaways must contain 2-4 items centered on Section 92
+- knowledgeCards must include "Section 92" and may include "Division of Powers"
+- unresolvedQuestions should include how Section 92 should be understood with Section 91 and how provincial powers interact with doctrines such as POGG, paramountcy, or interjurisdictional immunity
+- nextActions must not make "Read Section 92" the first action, because Section 92 is already the captured focus
+- nextActions should prefer comparing Section 91 and Section 92, studying property and civil rights under Section 92(13), studying local or private matters under Section 92(16), and then studying POGG / paramountcy / interjurisdictional immunity
+- classification.topic should be "Division of Powers" or a close equivalent
+- classification.subtopics must include "Section 92"
+- classification.knowledgeTypes should include relevant values from the allowed list, such as statute, concept, doctrine, comparison
+- learningStandardUsed must be true
+- learningStandardMatchedTopics must include "Section 92" when applicable
+`;
+  }
+
+  if (focus === "section91") {
+    return `
+Captured content focus: Section 91.
+Do not return an empty or minimal closure.
+Required for this input:
+- summary must explain Section 91 as the federal legislative powers provision and connect it to Canadian federalism / division of powers
+- keyTakeaways must contain 2-4 items centered on Section 91
+- knowledgeCards must include "Section 91" and "Division of Powers"
+- unresolvedQuestions must include how Section 91 should be understood with Section 92 and how POGG relates to Section 91
+- nextActions should include reading Section 92, comparing federal powers and provincial powers, and studying POGG / paramountcy / double aspect
+- classification.topic should be "Division of Powers" or a close equivalent
+- classification.knowledgeTypes should include relevant values from the allowed list, such as statute, concept, doctrine, comparison
+- learningStandardUsed must be true
+- learningStandardMatchedTopics must include matched learning standard topics such as Section 91 and Division of Powers when applicable
+`;
+  }
+
+  if (focus === "comparison") {
+    return `
+Captured content focus: comparison between Section 91 and Section 92.
+Do not return an empty or minimal closure.
+Required for this input:
+- summary must treat Section 91 and Section 92 as a comparison within Canadian division of powers
+- knowledgeCards should include the section or concept most emphasized by the raw text, and may include "Division of Powers"
+- nextActions should deepen the comparison instead of repeating a section already studied as the first action
+- classification.topic should be "Division of Powers" or a close equivalent
+`;
+  }
+
+  return "";
+}
+
+function getConstitutionalSectionFocus(rawText: string): ConstitutionalSectionFocus {
   const text = rawText.toLowerCase();
-  return text.includes("section 91") || text.includes("constitution act, 1867");
+  const section91Count = countMatches(text, /\bsection\s*91\b/g);
+  const section92Count = countMatches(text, /\bsection\s*92\b/g);
+
+  if (section91Count === 0 && section92Count === 0) return "none";
+  if (section92Count > 0 && section91Count === 0) return "section92";
+  if (section91Count > 0 && section92Count === 0) return "section91";
+  if (section92Count > section91Count) return "section92";
+  if (section91Count > section92Count) return "section91";
+
+  const firstSection91 = text.search(/\bsection\s*91\b/);
+  const firstSection92 = text.search(/\bsection\s*92\b/);
+  if (firstSection92 >= 0 && (firstSection91 < 0 || firstSection92 < firstSection91)) return "section92";
+  if (firstSection91 >= 0 && (firstSection92 < 0 || firstSection91 < firstSection92)) return "section91";
+
+  return "comparison";
+}
+
+function countMatches(text: string, pattern: RegExp): number {
+  return text.match(pattern)?.length ?? 0;
 }
