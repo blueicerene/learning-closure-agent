@@ -197,9 +197,19 @@ status: "inbox"
 
 ## Roadmap
 
-After v0.1 is stable in real use:
+v0.2 已完成：Learning Standard & Progress Backbone。
 
-- test with several real learning sessions
-- refine capture heuristics only where needed
-- improve learning standards one subject at a time
-- consider export integrations later, only if the local-first workflow proves useful
+- multi-source Learning Standard structure
+- progress tracked by `standardId`
+- `learning-progress.json`
+- Chinese `Learning Progress Summary.md`
+- `GET /api/progress`
+- Section 91 / Section 92 real closure validation
+
+v0.3 下一步：Review Queue / Today Plan / lightweight learning planning。
+
+- pending action status management
+- lightweight review queue
+- today plan based on pending next actions
+- optional syllabus and official-source standard management later
+- keep the workflow local-first and permission-light
