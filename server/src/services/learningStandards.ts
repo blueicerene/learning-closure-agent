@@ -2,17 +2,48 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { LearningSession } from "../types.js";
 
+type StandardSource = {
+  sourceType: "built_in" | "official_search" | "user_uploaded" | "user_custom";
+  sourceName: string;
+  sourceUrl: string;
+  sourceFile: string;
+  retrievedAt: string;
+  uploadedAt: string;
+  authorityLevel: "official" | "institutional" | "user" | "internal";
+  confirmedByUser: boolean;
+};
+
+type TopicGroup = {
+  group: string;
+  topics: string[];
+};
+
 type NextActionRule = {
-  whenContentIncludes: string[];
-  prioritize: string[];
+  ifTopicIncludes: string[];
+  suggest: string[];
 };
 
-type SubjectLearningStandard = {
-  coreTopics: string[];
+type LearningStandard = {
+  standardId: string;
+  standardName: string;
+  goalTrack: string;
+  subject: string;
+  standardSources: StandardSource[];
+  requiredTopicGroups: TopicGroup[];
+  supportingTopics: string[];
+  agentSuggestedTopics: string[];
+  userAddedTopics: string[];
+  recommendedSequence: string[];
   nextActionRules: NextActionRule[];
+  confirmedByUser: boolean;
+  lastReviewedAt: string;
+  version: string;
+  status: "active" | "draft" | "archived";
 };
 
-type LearningStandards = Record<string, Record<string, SubjectLearningStandard>>;
+type LearningStandardsConfig = {
+  standards: LearningStandard[];
+};
 
 export type LearningStandardContext = {
   used: boolean;
@@ -25,7 +56,12 @@ export type LearningStandardContext = {
 const standards = loadLearningStandards();
 
 export function getLearningStandardContext(session: LearningSession): LearningStandardContext {
-  const standard = standards[session.primaryGoalTrack]?.[session.subject];
+  const standard = standards.find((item) => (
+    item.status === "active"
+    && item.goalTrack === session.primaryGoalTrack
+    && item.subject === session.subject
+  ));
+
   if (!standard) {
     return {
       used: false,
@@ -37,34 +73,52 @@ export function getLearningStandardContext(session: LearningSession): LearningSt
   }
 
   const rawText = session.rawText.toLowerCase();
-  const matchedTopics = standard.coreTopics.filter((topic) => {
-    const topicText = topic.toLowerCase();
-    if (rawText.includes(topicText)) return true;
-    if (topic === "Division of Powers" && rawText.includes("division of powers")) return true;
-    if (topic === "Federal Paramountcy" && rawText.includes("paramountcy")) return true;
-    if (topic === "Double Aspect Doctrine" && rawText.includes("double aspect")) return true;
-    return false;
-  });
-
+  const coreTopics = collectStandardTopics(standard);
+  const matchedTopics = coreTopics.filter((topic) => topicMatchesRawText(topic, rawText));
   const prioritizedNextActions = standard.nextActionRules
-    .filter((rule) => rule.whenContentIncludes.some((needle) => rawText.includes(needle.toLowerCase())))
-    .flatMap((rule) => rule.prioritize);
+    .filter((rule) => rule.ifTopicIncludes.some((topic) => topicMatchesRawText(topic, rawText)))
+    .flatMap((rule) => rule.suggest);
 
   return {
     used: true,
     matchedTopics,
-    coreTopics: standard.coreTopics,
+    coreTopics,
     prioritizedNextActions,
     promptContext: [
-      `Learning standard available for ${session.primaryGoalTrack} / ${session.subject}.`,
-      `Core topics: ${standard.coreTopics.join(", ") || "None"}.`,
+      `Learning standard available: ${standard.standardId} (${standard.standardName}).`,
+      `Standard version: ${standard.version}. Confirmed by user: ${standard.confirmedByUser}.`,
+      `Core topics: ${coreTopics.join(", ") || "None"}.`,
+      `Recommended sequence: ${standard.recommendedSequence.join(" -> ") || "None"}.`,
       `Matched topics from captured content: ${matchedTopics.join(", ") || "None"}.`,
       `Prioritized next actions from learning standard: ${prioritizedNextActions.join("; ") || "None"}.`
     ].join("\n")
   };
 }
 
-function loadLearningStandards(): LearningStandards {
+function collectStandardTopics(standard: LearningStandard): string[] {
+  return unique([
+    ...standard.requiredTopicGroups.flatMap((group) => group.topics),
+    ...standard.supportingTopics,
+    ...standard.agentSuggestedTopics,
+    ...standard.userAddedTopics
+  ]);
+}
+
+function topicMatchesRawText(topic: string, rawText: string): boolean {
+  const normalizedTopic = topic.toLowerCase();
+  if (rawText.includes(normalizedTopic)) return true;
+  if (topic === "Federal vs Provincial Powers" && rawText.includes("federal powers") && rawText.includes("provincial powers")) return true;
+  if (topic === "Federal Paramountcy" && rawText.includes("paramountcy")) return true;
+  if (topic === "Double Aspect Doctrine" && rawText.includes("double aspect")) return true;
+  if (topic === "Amending Procedures" && rawText.includes("amending formula")) return true;
+  return false;
+}
+
+function unique(values: string[]): string[] {
+  return [...new Set(values)];
+}
+
+function loadLearningStandards(): LearningStandard[] {
   const candidates = [
     path.resolve(process.cwd(), "../config/learning-standards.json"),
     path.resolve(process.cwd(), "config/learning-standards.json")
@@ -72,11 +126,12 @@ function loadLearningStandards(): LearningStandards {
 
   for (const candidate of candidates) {
     try {
-      return JSON.parse(readFileSync(candidate, "utf8")) as LearningStandards;
+      const parsed = JSON.parse(readFileSync(candidate, "utf8")) as LearningStandardsConfig;
+      return Array.isArray(parsed.standards) ? parsed.standards : [];
     } catch {
       // Try the next likely cwd.
     }
   }
 
-  return {};
+  return [];
 }
