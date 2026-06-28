@@ -14,3 +14,9 @@ extension/dist
 # Keep example env files trackable
 !.env.example
 !server/.env.example
+
+# Editor swap files
+*.swp
+*.swo
+.*.swp
+.*.swo
