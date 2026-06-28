@@ -1,4 +1,5 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import path from "node:path";
 import type { LearningSession, NextAction, SessionClosure } from "../types.js";
 import { findLearningStandard, getStandardTopics, type LearningStandard } from "./learningStandards.js";
@@ -48,6 +49,8 @@ const emptyProgress: LearningProgress = {
   lastUpdatedAt: "",
   standards: {}
 };
+
+const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../");
 
 export async function getLearningProgress(): Promise<LearningProgress> {
   const progressPath = getProgressPath();
@@ -238,7 +241,7 @@ function list(items: string[]): string {
 
 function getProgressPath(): string {
   return process.env.LEARNING_PROGRESS_PATH
-    || path.resolve(process.cwd(), "output/learning-progress.json");
+    || path.join(projectRoot, "output/learning-progress.json");
 }
 
 function getSummaryPath(progressPath: string): string {
