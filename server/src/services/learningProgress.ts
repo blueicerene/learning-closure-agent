@@ -161,39 +161,75 @@ function getMissingTopics(standard: LearningStandard, coveredTopics: Record<stri
 }
 
 async function writeProgressSummary(progress: LearningProgress, summaryPath: string): Promise<void> {
-  const sections = Object.values(progress.standards).map((standard) => `## ${standard.standardName}
+  const sections = Object.values(progress.standards).map((standard) => {
+    const standardDefinition = findLearningStandard(standard.goalTrack, standard.subject);
+    const coveredTopicNames = Object.keys(standard.coveredTopics);
+    const missingCoreTopics = standardDefinition
+      ? standardDefinition.requiredTopicGroups
+          .flatMap((group) => group.topics)
+          .filter((topic) => !coveredTopicNames.includes(topic))
+      : standard.missingTopics;
+    const missingSupportingTopics = standardDefinition
+      ? standardDefinition.supportingTopics.filter((topic) => !coveredTopicNames.includes(topic))
+      : [];
 
-Goal / Subject: ${standard.goalTrack} / ${standard.subject}
+    return `## ${standard.goalTrack} / ${standard.subject}
+
 Last Studied At: ${standard.lastStudiedAt || "Not studied yet"}
 
-### Covered Topics
+### 建议下一步
 
-${list(Object.keys(standard.coveredTopics))}
+${formatRecommendedNextAction(standard.pendingNextActions)}
 
-### Missing Topics
+### 已接触主题
 
-${list(standard.missingTopics)}
+${list(coveredTopicNames)}
 
-### Unresolved Questions
+### 待覆盖核心主题
+
+${list(missingCoreTopics)}
+
+### 待补充辅助主题
+
+${list(missingSupportingTopics)}
+
+### 未解决问题
 
 ${list(standard.unresolvedQuestions.map((item) => item.question))}
 
-### Pending Next Actions
+### 待执行行动
 
-${list(standard.pendingNextActions.map((item) => `${item.action} - ${item.reason}`))}
+${list(standard.pendingNextActions.map((item) => `${item.action}：${item.reason}`))}
 
-### Source Files
+### 来源文件
 
-${list(standard.sourceFiles)}
-`);
+${list(standard.sourceFiles.map(formatSourceFile))}
+`;
+  });
 
   await mkdir(path.dirname(summaryPath), { recursive: true });
-  await writeFile(summaryPath, `# Learning Progress Summary
+  await writeFile(summaryPath, `# 学习进度摘要
 
 Last Updated At: ${progress.lastUpdatedAt || "Not updated yet"}
 
-${sections.join("\n---\n\n") || "No learning progress recorded yet."}
+${sections.join("\n---\n\n") || "暂无学习进度。"}
 `, "utf8");
+}
+
+function formatRecommendedNextAction(actions: ProgressAction[]): string {
+  const [firstAction] = actions;
+  if (!firstAction) return "暂无建议。";
+  return `${firstAction.action}：${firstAction.reason}`;
+}
+
+function formatSourceFile(sourceFile: string): string {
+  const outputSegment = `${path.sep}output${path.sep}`;
+  const outputIndex = sourceFile.lastIndexOf(outputSegment);
+  if (outputIndex >= 0) {
+    return sourceFile.slice(outputIndex + 1);
+  }
+
+  return path.basename(sourceFile);
 }
 
 function list(items: string[]): string {
