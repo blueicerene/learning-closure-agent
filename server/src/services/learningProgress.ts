@@ -106,22 +106,28 @@ export async function updateLearningProgress(
   }
 
   standardProgress.missingTopics = getMissingTopics(standard, standardProgress.coveredTopics);
-  standardProgress.unresolvedQuestions = [
-    ...standardProgress.unresolvedQuestions,
-    ...closure.unresolvedQuestions.map((question) => ({
-      question,
-      capturedAt: session.capturedAt,
-      sourceFile: markdownPath
-    }))
-  ];
-  standardProgress.pendingNextActions = [
-    ...standardProgress.pendingNextActions,
-    ...closure.nextActions.map((action) => ({
-      ...action,
-      capturedAt: session.capturedAt,
-      sourceFile: markdownPath
-    }))
-  ];
+  standardProgress.unresolvedQuestions = uniqueByNormalizedText(
+    [
+      ...standardProgress.unresolvedQuestions,
+      ...closure.unresolvedQuestions.map((question) => ({
+        question,
+        capturedAt: session.capturedAt,
+        sourceFile: markdownPath
+      }))
+    ],
+    (item) => item.question
+  );
+  standardProgress.pendingNextActions = uniqueByNormalizedText(
+    [
+      ...standardProgress.pendingNextActions,
+      ...closure.nextActions.map((action) => ({
+        ...action,
+        capturedAt: session.capturedAt,
+        sourceFile: markdownPath
+      }))
+    ],
+    (item) => item.action
+  );
   standardProgress.sourceFiles = unique([...standardProgress.sourceFiles, markdownPath]);
   standardProgress.lastStudiedAt = session.capturedAt;
 
@@ -250,4 +256,22 @@ function getSummaryPath(progressPath: string): string {
 
 function unique(values: string[]): string[] {
   return [...new Set(values)];
+}
+
+function uniqueByNormalizedText<T>(items: T[], getText: (item: T) => string): T[] {
+  const seen = new Set<string>();
+  const result: T[] = [];
+
+  for (const item of items) {
+    const key = normalizeText(getText(item));
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+  }
+
+  return result;
+}
+
+function normalizeText(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
