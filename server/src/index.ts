@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import express from "express";
 import { closureRouter } from "./routes/closure.js";
 import { lastActionRouter } from "./routes/lastAction.js";
+import { progressRouter } from "./routes/progress.js";
 import { saveRouter } from "./routes/save.js";
 
 dotenv.config();
@@ -20,6 +21,7 @@ app.get("/health", (_req, res) => {
 app.use("/api/closure", closureRouter);
 app.use("/api/save", saveRouter);
 app.use("/api/last-action", lastActionRouter);
+app.use("/api/progress", progressRouter);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   const message = err instanceof Error ? err.message : "Unexpected server error";

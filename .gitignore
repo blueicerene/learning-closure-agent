@@ -10,3 +10,7 @@ server/.env.*
 output
 server/dist
 extension/dist
+
+# Keep example env files trackable
+!.env.example
+!server/.env.example

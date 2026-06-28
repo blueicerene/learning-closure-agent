@@ -23,7 +23,7 @@ type NextActionRule = {
   suggest: string[];
 };
 
-type LearningStandard = {
+export type LearningStandard = {
   standardId: string;
   standardName: string;
   goalTrack: string;
@@ -56,11 +56,7 @@ export type LearningStandardContext = {
 const standards = loadLearningStandards();
 
 export function getLearningStandardContext(session: LearningSession): LearningStandardContext {
-  const standard = standards.find((item) => (
-    item.status === "active"
-    && item.goalTrack === session.primaryGoalTrack
-    && item.subject === session.subject
-  ));
+  const standard = findLearningStandard(session.primaryGoalTrack, session.subject);
 
   if (!standard) {
     return {
@@ -93,6 +89,18 @@ export function getLearningStandardContext(session: LearningSession): LearningSt
       `Prioritized next actions from learning standard: ${prioritizedNextActions.join("; ") || "None"}.`
     ].join("\n")
   };
+}
+
+export function findLearningStandard(goalTrack: string, subject: string): LearningStandard | undefined {
+  return standards.find((item) => (
+    item.status === "active"
+    && item.goalTrack === goalTrack
+    && item.subject === subject
+  ));
+}
+
+export function getStandardTopics(standard: LearningStandard): string[] {
+  return collectStandardTopics(standard);
 }
 
 function collectStandardTopics(standard: LearningStandard): string[] {
