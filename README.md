@@ -166,6 +166,16 @@ Debug mode may print raw LLM responses and parsed closures. It must not print AP
 - Do not commit `.env` or `server/.env` to GitHub.
 - Use `server/.env.example` as a placeholder template only.
 
+## 合规与许可材料说明 / Compliance Notice
+
+This project must not be used to process licensed or restricted exam materials unless the user has confirmed that the material is permitted to be processed by the chosen tools.
+
+特别是，对于 LSO licensing materials 或类似受许可限制的考试材料，不得将材料正文输入、上传、粘贴、截图、总结、翻译、释义或以其他方式传输到生成式 AI 工具，包括 real LLM mode。
+
+Allowed use is limited to content the user has the right to process, such as original notes, public legal sources, public webpages, self-written reflections, and non-restricted learning metadata.
+
+The user is responsible for checking the terms, licenses, and exam-body rules that apply to any source material.
+
 ## 隐私与安全 / Privacy & Security
 
 - Captures only after the user clicks a button.
@@ -206,10 +216,8 @@ v0.2 已完成：Learning Standard & Progress Backbone。
 - `GET /api/progress`
 - Section 91 / Section 92 real closure validation
 
-v0.3 下一步：Review Queue / Today Plan / lightweight learning planning。
+v0.3 暂停：不继续扩展 Review Queue / Today Plan / Bar or NCA planner。
 
-- pending action status management
-- lightweight review queue
-- today plan based on pending next actions
-- optional syllabus and official-source standard management later
-- keep the workflow local-first and permission-light
+原因：考试机构和学习材料许可可能限制将授权材料输入、上传或传输到生成式 AI 工具。继续扩展学习计划、复习队列或考试材料处理功能前，必须先完成来源许可和合规边界设计。
+
+当前项目作为 v0.2 稳定原型收口：local-first capture, closure, Markdown export, and learning progress backbone for permitted content only.
