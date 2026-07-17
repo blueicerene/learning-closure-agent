@@ -222,7 +222,7 @@ final class DropperView: NSView {
         guard let url = components.url else { throw DropperError.invalidResponse }
 
         DispatchQueue.main.async {
-          NSWorkspace.shared.open(url)
+          openVocabUrl(url)
           self.isBusy = false
           self.setStatus("Done", active: false, error: false)
           self.resetSoon()
@@ -285,6 +285,56 @@ func loadActionFrames() -> [NSImage] {
 
   let fallback = [NSImage(contentsOf: dropperAssetsDir.appendingPathComponent("dropper-icon-frame-0.png"))].compactMap { $0 }
   return fallback
+}
+
+func openVocabUrl(_ url: URL) {
+  if openInExistingChromeVocabTab(url) {
+    return
+  }
+
+  NSWorkspace.shared.open(url)
+}
+
+func openInExistingChromeVocabTab(_ url: URL) -> Bool {
+  guard NSWorkspace.shared.runningApplications.contains(where: { $0.bundleIdentifier == "com.google.Chrome" }) else {
+    return false
+  }
+
+  let urlString = url.absoluteString
+  let escapedUrl = urlString
+    .replacingOccurrences(of: "\\", with: "\\\\")
+    .replacingOccurrences(of: "\"", with: "\\\"")
+
+  let script = """
+  tell application "Google Chrome"
+    set targetUrl to "\(escapedUrl)"
+    repeat with chromeWindow in windows
+      set tabIndex to 0
+      repeat with chromeTab in tabs of chromeWindow
+        set tabIndex to tabIndex + 1
+        set currentUrl to URL of chromeTab
+        if currentUrl starts with "http://127.0.0.1:5174" or currentUrl starts with "http://localhost:5174" then
+          set URL of chromeTab to targetUrl
+          set active tab index of chromeWindow to tabIndex
+          set index of chromeWindow to 1
+          activate
+          return "reused"
+        end if
+      end repeat
+    end repeat
+  end tell
+  return "not-found"
+  """
+
+  var error: NSDictionary?
+  guard let result = NSAppleScript(source: script)?.executeAndReturnError(&error) else {
+    if let error {
+      print("Chrome reuse AppleScript error: \(error)")
+    }
+    return false
+  }
+
+  return result.stringValue == "reused"
 }
 
 func droppedImage(from pasteboard: NSPasteboard) -> DroppedImage? {
