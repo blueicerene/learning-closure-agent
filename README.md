@@ -192,6 +192,14 @@ Then start the desktop drop target:
 npm run dev:dropper
 ```
 
+For daily use on macOS, build the double-click desktop app:
+
+```bash
+scripts/build-da-wang-app.sh
+```
+
+This creates `/Users/rene/Desktop/大王查词.app` with a Da Wang icon. Double-clicking the app starts the backend, starts the vocab web app if needed, and opens the floating `大王` drop target.
+
 The floating `大王` window stays above other windows, remembers its last position, and accepts dragged image files. A typical flow is:
 
 1. Take a screenshot of one English legal word or short phrase.
