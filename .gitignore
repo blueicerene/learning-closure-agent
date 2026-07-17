@@ -11,6 +11,17 @@ output
 server/dist
 extension/dist
 
+# Desktop dropper experimental/generated variants not used by the stable icon
+desktop-dropper/assets/action-ball-chase-frame-*.png
+desktop-dropper/assets/action-sleep-breathe-frame-*.png
+desktop-dropper/assets/dropper-icon-frame-*.png
+desktop-dropper/assets/action-belly.png
+desktop-dropper/assets/action-play.png
+desktop-dropper/assets/action-sit.png
+desktop-dropper/assets/action-sleep.png
+desktop-dropper/assets/dropper-source.png
+desktop-dropper/assets/references/
+
 # Keep example env files trackable
 !.env.example
 !server/.env.example
