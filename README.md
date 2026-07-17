@@ -133,6 +133,82 @@ Use the extension:
 4. Click Generate Closure.
 5. Click Save.
 
+## 法律英语词汇选择题 / Legal Vocab Quiz
+
+v0.1 includes a local web app for manually pasted legal English vocabulary.
+
+Start the backend:
+
+```bash
+npm run dev:server
+```
+
+Start the vocab web app:
+
+```bash
+npm run dev:web
+```
+
+Open `http://127.0.0.1:5174`.
+
+Paste one vocabulary item per line, for example:
+
+```text
+estoppel - A rule preventing a person from denying something previously represented.
+fiduciary duty: A duty to act loyally for another person's interests.
+1. injunction - A court order requiring a person to do or stop doing an act.
+- consideration: Something of value exchanged to form a binding contract.
+```
+
+The quiz shows one English term and four English definitions. Wrong answers enter the local review queue, and correct streaks schedule the next review after 3 / 7 / 14 / 30 days.
+
+Vocabulary data is saved locally in `output/legal-vocab.json` and must not be committed.
+
+### NotebookLM selected word lookup
+
+After loading the Chrome extension, NotebookLM pages support selected word lookup:
+
+1. Start the local backend with `npm run dev:server`.
+2. Open NotebookLM in Chrome.
+3. Select an English legal word or short phrase.
+4. Click the floating `Look up` button.
+
+The extension sends only the selected word or short phrase to the local backend, shows English and Chinese definitions in a small page popup, and automatically saves the word into tomorrow's local vocab review queue.
+
+### Desktop image word lookup / 大王拖拽入口
+
+The project also includes a small macOS desktop drop target for screenshot-based lookup.
+
+Start the backend and web app first:
+
+```bash
+npm run dev:server
+npm run dev:web
+```
+
+Then start the desktop drop target:
+
+```bash
+npm run dev:dropper
+```
+
+The floating `大王` window stays above other windows, remembers its last position, and accepts dragged image files. A typical flow is:
+
+1. Take a screenshot of one English legal word or short phrase.
+2. Drag the image onto the `大王` window or its `Drop` banner.
+3. The app opens the local vocab web page.
+4. OCR reads the word from the image.
+5. The dictionary lookup runs and the word is added to review.
+
+Current stable behavior:
+
+- `大王` stands and wags his tail.
+- The window can be moved manually.
+- The window is kept visible when clicking the desktop.
+- The visible card and `Drop` banner are intentional because fully transparent macOS windows do not reliably receive image drag events.
+
+The desktop dropper is local-only. It posts the dragged image to the local backend, receives a temporary handoff key, then opens the local web app with that key.
+
 ## 真实 LLM Mode / Real LLM Mode
 
 Real LLM mode calls the configured LLM API from the local server only. The extension never receives the API key.

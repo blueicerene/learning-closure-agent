@@ -6,8 +6,18 @@
   "permissions": ["activeTab", "scripting", "storage"],
   "host_permissions": [
     "http://localhost:3333/*",
+    "http://localhost:5174/*",
+    "http://127.0.0.1:5174/*",
     "https://chatgpt.com/*",
     "https://notebooklm.google.com/*",
+    "https://eclass.yorku.ca/*",
+    "https://www.canlii.org/*",
+    "https://canlii.org/*",
+    "https://laws-lois.justice.gc.ca/*",
+    "https://www.justice.gc.ca/*",
+    "https://www.scc-csc.ca/*",
+    "https://decisions.scc-csc.ca/*",
+    "https://www.ontario.ca/laws/*",
     "https://www.youtube.com/*"
   ],
   "action": {
@@ -17,5 +27,24 @@
   "background": {
     "service_worker": "assets/background.js",
     "type": "module"
-  }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://notebooklm.google.com/*",
+        "https://eclass.yorku.ca/*",
+        "https://www.canlii.org/*",
+        "https://canlii.org/*",
+        "https://laws-lois.justice.gc.ca/*",
+        "https://www.justice.gc.ca/*",
+        "https://www.scc-csc.ca/*",
+        "https://decisions.scc-csc.ca/*",
+        "https://www.ontario.ca/laws/*",
+        "http://localhost:5174/*",
+        "http://127.0.0.1:5174/*"
+      ],
+      "js": ["assets/contentScript.js"],
+      "all_frames": true
+    }
+  ]
 }

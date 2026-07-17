@@ -4,11 +4,14 @@
   "version": "0.1.0",
   "workspaces": [
     "extension",
-    "server"
+    "server",
+    "web"
   ],
   "scripts": {
     "dev:server": "npm --workspace server run dev",
     "dev:extension": "npm --workspace extension run dev",
+    "dev:web": "npm --workspace web run dev",
+    "dev:dropper": "swift desktop-dropper/LegalVocabDropper.swift",
     "build": "npm --workspaces run build"
   }
 }
