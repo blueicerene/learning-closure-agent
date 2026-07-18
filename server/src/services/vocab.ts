@@ -10,6 +10,10 @@ export type ReviewState = {
   status: VocabStatus;
   correctStreak: number;
   wrongCount: number;
+  memoryStrength?: number;
+  easeFactor?: number;
+  lastIntervalDays?: number;
+  retentionTarget?: number;
   lastReviewedAt?: string;
   nextReviewAt?: string;
   lastResult?: VocabResult;
@@ -1335,14 +1339,30 @@ function createQuestion(item: VocabItem, items: VocabItem[], date: string): Voca
   };
 }
 
+const DEFAULT_RETENTION_TARGET = 0.85;
+const DEFAULT_EASE_FACTOR = 2.2;
+const MIN_EASE_FACTOR = 1.35;
+const MAX_EASE_FACTOR = 2.8;
+const MIN_MEMORY_STRENGTH_DAYS = 6;
+const FIRST_CORRECT_MEMORY_STRENGTH_DAYS = 18;
+const MASTERED_INTERVAL_DAYS = 30;
+const MAX_REVIEW_INTERVAL_DAYS = 60;
+
 function nextCorrectState(current: ReviewState, answeredDate: string): ReviewState {
   const correctStreak = current.correctStreak + 1;
-  const interval = correctStreak >= 4 ? 30 : [0, 3, 7, 14][correctStreak] ?? 30;
+  const easeFactor = nextEaseFactor(current, true);
+  const memoryStrength = nextMemoryStrength(current, correctStreak, easeFactor);
+  const retentionTarget = current.retentionTarget ?? DEFAULT_RETENTION_TARGET;
+  const interval = calculateEbbinghausInterval(memoryStrength, retentionTarget);
 
   return {
-    status: correctStreak >= 4 ? "mastered" : "review",
+    status: interval >= MASTERED_INTERVAL_DAYS || correctStreak >= 4 ? "mastered" : "review",
     correctStreak,
     wrongCount: current.wrongCount,
+    memoryStrength,
+    easeFactor,
+    lastIntervalDays: interval,
+    retentionTarget,
     lastReviewedAt: answeredDate,
     nextReviewAt: addDays(answeredDate, interval),
     lastResult: "correct"
@@ -1350,21 +1370,84 @@ function nextCorrectState(current: ReviewState, answeredDate: string): ReviewSta
 }
 
 function nextWrongState(current: ReviewState, answeredDate: string): ReviewState {
+  const easeFactor = nextEaseFactor(current, false);
+  const memoryStrength = Math.max(MIN_MEMORY_STRENGTH_DAYS, estimateMemoryStrength(current) * 0.45);
+
   return {
     status: "learning",
     correctStreak: 0,
     wrongCount: current.wrongCount + 1,
+    memoryStrength,
+    easeFactor,
+    lastIntervalDays: 1,
+    retentionTarget: current.retentionTarget ?? DEFAULT_RETENTION_TARGET,
     lastReviewedAt: answeredDate,
     nextReviewAt: addDays(answeredDate, 1),
     lastResult: "wrong"
   };
 }
 
+function nextEaseFactor(current: ReviewState, isCorrect: boolean): number {
+  const currentEase = current.easeFactor ?? DEFAULT_EASE_FACTOR;
+  const adjusted = isCorrect ? currentEase + 0.08 : currentEase - 0.3;
+  return clampNumber(adjusted, MIN_EASE_FACTOR, MAX_EASE_FACTOR);
+}
+
+function nextMemoryStrength(current: ReviewState, correctStreak: number, easeFactor: number): number {
+  if (correctStreak <= 1) return FIRST_CORRECT_MEMORY_STRENGTH_DAYS;
+  return Math.max(FIRST_CORRECT_MEMORY_STRENGTH_DAYS, estimateMemoryStrength(current) * easeFactor);
+}
+
+function calculateEbbinghausInterval(memoryStrength: number, retentionTarget: number): number {
+  const safeTarget = clampNumber(retentionTarget, 0.65, 0.95);
+  const interval = Math.ceil(-memoryStrength * Math.log(safeTarget));
+  return clampNumber(interval, 1, MAX_REVIEW_INTERVAL_DAYS);
+}
+
+function estimateMemoryStrength(current: ReviewState): number {
+  if (typeof current.memoryStrength === "number" && Number.isFinite(current.memoryStrength) && current.memoryStrength > 0) {
+    return current.memoryStrength;
+  }
+
+  if (typeof current.lastIntervalDays === "number" && current.lastIntervalDays > 0) {
+    return current.lastIntervalDays / -Math.log(current.retentionTarget ?? DEFAULT_RETENTION_TARGET);
+  }
+
+  return legacyMemoryStrength(current.correctStreak);
+}
+
+function legacyMemoryStrength(correctStreak: number): number {
+  if (correctStreak <= 0) return MIN_MEMORY_STRENGTH_DAYS;
+  if (correctStreak === 1) return FIRST_CORRECT_MEMORY_STRENGTH_DAYS;
+  if (correctStreak === 2) return 43;
+  if (correctStreak === 3) return 86;
+  return 185;
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function optionalPositiveNumber(value: unknown): number | undefined {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) && numberValue > 0 ? numberValue : undefined;
+}
+
+function optionalRetentionTarget(value: unknown): number {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) && numberValue > 0 && numberValue < 1
+    ? clampNumber(numberValue, 0.65, 0.95)
+    : DEFAULT_RETENTION_TARGET;
+}
+
 function createNewReviewState(): ReviewState {
   return {
     status: "new",
     correctStreak: 0,
-    wrongCount: 0
+    wrongCount: 0,
+    memoryStrength: 0,
+    easeFactor: DEFAULT_EASE_FACTOR,
+    retentionTarget: DEFAULT_RETENTION_TARGET
   };
 }
 
@@ -1373,6 +1456,10 @@ function createTomorrowReviewState(now: string): ReviewState {
     status: "learning",
     correctStreak: 0,
     wrongCount: 0,
+    memoryStrength: MIN_MEMORY_STRENGTH_DAYS,
+    easeFactor: DEFAULT_EASE_FACTOR,
+    lastIntervalDays: 1,
+    retentionTarget: DEFAULT_RETENTION_TARGET,
     nextReviewAt: addDays(dateKey(now), 1)
   };
 }
@@ -1425,6 +1512,10 @@ function normalizeItem(item: unknown): VocabItem {
       status: candidate.reviewState?.status ?? "new",
       correctStreak: Number(candidate.reviewState?.correctStreak ?? 0),
       wrongCount: Number(candidate.reviewState?.wrongCount ?? 0),
+      memoryStrength: optionalPositiveNumber(candidate.reviewState?.memoryStrength),
+      easeFactor: optionalPositiveNumber(candidate.reviewState?.easeFactor) ?? DEFAULT_EASE_FACTOR,
+      lastIntervalDays: optionalPositiveNumber(candidate.reviewState?.lastIntervalDays),
+      retentionTarget: optionalRetentionTarget(candidate.reviewState?.retentionTarget),
       lastReviewedAt: candidate.reviewState?.lastReviewedAt,
       nextReviewAt: candidate.reviewState?.nextReviewAt,
       lastResult: candidate.reviewState?.lastResult

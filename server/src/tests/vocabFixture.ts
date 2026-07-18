@@ -277,6 +277,9 @@ fiduciary duty: A duty to act loyally for another person's interests.
   });
   assert.equal(firstCorrect.reviewState.correctStreak, 1);
   assert.equal(firstCorrect.reviewState.nextReviewAt, "2026-07-12");
+  assert.equal(firstCorrect.reviewState.lastIntervalDays, 3);
+  assert.ok((firstCorrect.reviewState.memoryStrength ?? 0) > 0);
+  assert.equal(firstCorrect.reviewState.retentionTarget, 0.85);
   assert.equal((await getVocabItems()).stats.reviewed, 1);
 
   const secondCorrect = await recordVocabAnswer({
@@ -287,6 +290,7 @@ fiduciary duty: A duty to act loyally for another person's interests.
     answeredAt: "2026-07-12T12:00:00.000Z"
   });
   assert.equal(secondCorrect.reviewState.nextReviewAt, "2026-07-19");
+  assert.equal(secondCorrect.reviewState.lastIntervalDays, 7);
 
   const thirdCorrect = await recordVocabAnswer({
     itemId: question.itemId,
@@ -295,7 +299,8 @@ fiduciary duty: A duty to act loyally for another person's interests.
     isCorrect: true,
     answeredAt: "2026-07-19T12:00:00.000Z"
   });
-  assert.equal(thirdCorrect.reviewState.nextReviewAt, "2026-08-02");
+  assert.equal(thirdCorrect.reviewState.nextReviewAt, "2026-08-01");
+  assert.equal(thirdCorrect.reviewState.lastIntervalDays, 13);
 
   const fourthCorrect = await recordVocabAnswer({
     itemId: question.itemId,
@@ -305,7 +310,8 @@ fiduciary duty: A duty to act loyally for another person's interests.
     answeredAt: "2026-08-02T12:00:00.000Z"
   });
   assert.equal(fourthCorrect.reviewState.status, "mastered");
-  assert.equal(fourthCorrect.reviewState.nextReviewAt, "2026-09-01");
+  assert.equal(fourthCorrect.reviewState.nextReviewAt, "2026-08-31");
+  assert.equal(fourthCorrect.reviewState.lastIntervalDays, 29);
   assert.equal((await getVocabItems()).stats.mastered, 1);
 
   await writeFile(process.env.LEGAL_VOCAB_PATH!, JSON.stringify({

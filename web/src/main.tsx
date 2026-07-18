@@ -10,6 +10,10 @@ type ReviewState = {
   status: ReviewStatus;
   correctStreak: number;
   wrongCount: number;
+  memoryStrength?: number;
+  easeFactor?: number;
+  lastIntervalDays?: number;
+  retentionTarget?: number;
   lastReviewedAt?: string;
   nextReviewAt?: string;
   lastResult?: ReviewResult;
