@@ -977,10 +977,27 @@ export async function deleteVocabItem(itemId: string): Promise<{ deleted: boolea
 
 export async function getVocabReview(date = todayKey(), mode: ReviewMode = "due"): Promise<VocabReviewResponse> {
   const store = await readStore();
+  const candidateItems = store.items
+    .filter((item) => {
+      if (mode === "all") return true;
+      if (mode === "wrong") return isWrongQueueItem(item);
+      return isDue(item, date);
+    })
+    .sort((a, b) => reviewPriority(a, date) - reviewPriority(b, date));
+
+  await repairDefinitionsForQuiz(store, candidateItems);
+
   const reviewableItems = store.items.filter(hasEnglishDefinition);
   const definitions = uniqueDefinitions(reviewableItems);
 
   if (definitions.length < 4) {
+    await repairDefinitionsForQuiz(store, store.items);
+  }
+
+  const refreshedReviewableItems = store.items.filter(hasEnglishDefinition);
+  const refreshedDefinitions = uniqueDefinitions(refreshedReviewableItems);
+
+  if (refreshedDefinitions.length < 4) {
     return {
       date,
       canStart: false,
@@ -989,7 +1006,7 @@ export async function getVocabReview(date = todayKey(), mode: ReviewMode = "due"
     };
   }
 
-  const dueItems = reviewableItems
+  const dueItems = refreshedReviewableItems
     .filter((item) => {
       if (mode === "all") return true;
       if (mode === "wrong") return isWrongQueueItem(item);
@@ -1007,7 +1024,7 @@ export async function getVocabReview(date = todayKey(), mode: ReviewMode = "due"
     date,
     canStart: dueItems.length > 0,
     reason: dueItems.length > 0 ? undefined : emptyReason,
-    questions: dueItems.map((item) => createQuestion(item, reviewableItems, date))
+    questions: dueItems.map((item) => createQuestion(item, refreshedReviewableItems, date))
   };
 }
 
@@ -1262,6 +1279,45 @@ function trimMarkdownCell(value: string): string {
 
 function normalizeLine(line: string): string {
   return line.replace(/\u00a0/g, " ").trim();
+}
+
+async function repairDefinitionsForQuiz(store: VocabStore, candidates: VocabItem[]): Promise<void> {
+  const repairTargets = candidates.filter((item) => !hasEnglishDefinition(item));
+  if (repairTargets.length === 0) return;
+
+  const now = new Date().toISOString();
+  let updated = false;
+
+  for (const item of repairTargets) {
+    const entry = await fetchOnlineDictionaryEntry(item.term);
+    if (!entry?.definition || !hasUsableDictionaryDefinition(entry)) continue;
+
+    item.term = entry.term;
+    item.definition = entry.definition;
+    item.chineseDefinition = entry.chineseDefinition || item.chineseDefinition || await getChineseDefinition(entry.term, entry.definition);
+    item.legalContext = entry.legalContext || item.legalContext || entry.legalNote?.contextExplanation;
+    item.lookupQuality = entry.lookupQuality;
+    item.sourceLabel = entry.sourceLabel;
+    item.lookupWarning = entry.lookupWarning || getDefaultLookupWarning(entry.lookupQuality);
+    item.phonetic = entry.phonetic || item.phonetic;
+    item.pronunciation = entry.pronunciation || item.pronunciation;
+    item.legalNote = entry.legalNote || item.legalNote;
+    item.updatedAt = now;
+    updated = true;
+  }
+
+  if (updated) {
+    store.updatedAt = now;
+    await writeStore(store);
+  }
+}
+
+function hasUsableDictionaryDefinition(entry: DictionaryEntry): boolean {
+  return Boolean(entry.definition)
+    && !containsCjk(entry.definition)
+    && isLikelyEnglishExplanation(entry.definition)
+    && isQuizDefinitionUsable(entry.definition)
+    && !isClearlyNonLegalReference(entry.term, entry.definition);
 }
 
 function createQuestion(item: VocabItem, items: VocabItem[], date: string): VocabReviewQuestion {

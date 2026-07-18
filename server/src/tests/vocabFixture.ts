@@ -325,6 +325,22 @@ fiduciary duty: A duty to act loyally for another person's interests.
   assert.equal(legacyReview.questions.some((legacyQuestion) => legacyQuestion.term === "legacy bad"), false);
   assert.equal(legacyReview.questions.some((legacyQuestion) => legacyQuestion.options.includes("The law-making body of a .")), false);
 
+  await writeFile(process.env.LEGAL_VOCAB_PATH!, JSON.stringify({
+    version: "v0.1",
+    updatedAt: "2026-07-18T12:00:00.000Z",
+    items: [
+      legacyItem("custody", "The state of being kept under legal ."),
+      legacyItem("valid one", "A valid legal definition used for the first quiz option."),
+      legacyItem("valid two", "A valid legal definition used for the second quiz option."),
+      legacyItem("valid three", "A valid legal definition used for the third quiz option.")
+    ]
+  }), "utf8");
+  const repairedReview = await getVocabReview("2026-07-18", "all");
+  assert.equal(repairedReview.canStart, true);
+  assert.equal(repairedReview.questions.length, 4);
+  const repairedCustody = (await getVocabItems()).items.find((item) => item.term === "custody");
+  assert.equal(repairedCustody?.definition, "The state of being kept under legal restraint.");
+
   await rm(tmpDir, { recursive: true, force: true });
   globalThis.fetch = originalFetch;
   console.log("Vocab fixture passed");
