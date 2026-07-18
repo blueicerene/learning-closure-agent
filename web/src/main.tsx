@@ -539,7 +539,8 @@ function App() {
       setDictionaryResultQuery("");
       setSavedLookupItem(null);
       setOcrStatus(`Recognized: ${text}`);
-      setStatus("Image recognized");
+      setStatus("Image recognized, looking up");
+      await lookupDictionary(text);
     } catch (err) {
       showError(err);
       setOcrStatus("OCR failed");
