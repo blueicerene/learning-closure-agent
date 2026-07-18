@@ -4,24 +4,14 @@ const maxChars = 80_000;
 const notebookLookupButtonId = "lca-vocab-lookup-button";
 const notebookLookupPanelId = "lca-vocab-lookup-panel";
 const imageDropTargetId = "lca-image-drop-target";
+const vocabApiBaseUrl = "http://127.0.0.1:3333";
 let notebookSpeechVoices: SpeechSynthesisVoice[] = [];
 let selectedNotebookVoiceURI = "";
 
 type VocabLookupResponse =
   | {
       ok: true;
-      result: {
-        term: string;
-        definition: string;
-        chineseDefinition?: string;
-        legalContext?: string;
-        lookupQuality?: "ai-legal" | "legal-glossary" | "saved" | "reference" | "dictionary";
-        sourceLabel?: string;
-        lookupWarning?: string;
-        phonetic?: string;
-        pronunciation?: string;
-        found: boolean;
-      };
+      result: VocabLookupResult;
       saveStatus?: "saved" | "alreadySaved" | "failed" | "skipped";
       saveError?: string;
     }
@@ -29,6 +19,19 @@ type VocabLookupResponse =
       ok: false;
       error: string;
     };
+
+type VocabLookupResult = {
+  term: string;
+  definition: string;
+  chineseDefinition?: string;
+  legalContext?: string;
+  lookupQuality?: "ai-legal" | "legal-glossary" | "saved" | "reference" | "dictionary";
+  sourceLabel?: string;
+  lookupWarning?: string;
+  phonetic?: string;
+  pronunciation?: string;
+  found: boolean;
+};
 
 setupCaptureListener();
 setupNotebookLmVocabLookup();
@@ -337,24 +340,19 @@ async function lookupSelectedTerm(term: string) {
     status: "Looking up..."
   });
 
-  let response: VocabLookupResponse;
   try {
-    response = await withTimeout(
-      chrome.runtime.sendMessage({
-        type: "VOCAB_LOOKUP_SAVE",
-        term
-      }) as Promise<VocabLookupResponse>,
-      12000
-    );
+    const response = await lookupAndSaveTermDirectly(term);
+    renderLookupResponse(term, response);
   } catch (error) {
     showLookupPanel({
       term,
       status: getLookupErrorMessage(error),
       isError: true
     });
-    return;
   }
+}
 
+function renderLookupResponse(term: string, response: VocabLookupResponse) {
   if (!response.ok) {
     showLookupPanel({
       term,
@@ -387,6 +385,79 @@ async function lookupSelectedTerm(term: string) {
   });
 }
 
+async function lookupAndSaveTermDirectly(term: string): Promise<VocabLookupResponse> {
+  const cleanTerm = term.trim();
+  if (!cleanTerm) {
+    return { ok: false, error: "No selected term found." };
+  }
+
+  const lookup = await requestLocalVocabApi<VocabLookupResult>(
+    `/api/vocab/lookup?term=${encodeURIComponent(cleanTerm)}`,
+    { timeoutMs: 12000 }
+  );
+
+  if (!lookup.found) {
+    return {
+      ok: true,
+      result: lookup,
+      saveStatus: "skipped"
+    };
+  }
+
+  try {
+    const saveResult = await requestLocalVocabApi<{ created: boolean }>("/api/vocab/lookup/save-entry", {
+      method: "POST",
+      body: JSON.stringify(lookup),
+      timeoutMs: 12000
+    });
+
+    return {
+      ok: true,
+      result: lookup,
+      saveStatus: saveResult.created ? "saved" : "alreadySaved"
+    };
+  } catch (error) {
+    return {
+      ok: true,
+      result: lookup,
+      saveStatus: "failed",
+      saveError: getLookupErrorMessage(error)
+    };
+  }
+}
+
+async function requestLocalVocabApi<T>(
+  path: string,
+  options: { method?: string; body?: string; timeoutMs?: number } = {}
+): Promise<T> {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), options.timeoutMs ?? 12000);
+
+  try {
+    const response = await fetch(`${vocabApiBaseUrl}${path}`, {
+      method: options.method ?? "GET",
+      headers: options.body ? { "Content-Type": "application/json" } : undefined,
+      body: options.body,
+      cache: "no-store",
+      signal: controller.signal
+    });
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(typeof payload?.error === "string" ? payload.error : `Local vocab service returned ${response.status}.`);
+    }
+
+    return payload as T;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("Lookup timed out. Check that Da Wang lookup is open, then try again.");
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
 function getLookupPanelStatus(saveStatus?: "saved" | "alreadySaved" | "failed" | "skipped", saveError?: string): string {
   if (saveStatus === "saved") return "Saved for tomorrow";
   if (saveStatus === "alreadySaved") return "Already in review";
@@ -396,24 +467,19 @@ function getLookupPanelStatus(saveStatus?: "saved" | "alreadySaved" | "failed" |
 
 function getLookupErrorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error || "");
+  if (message.toLowerCase().includes("failed to fetch") || message.toLowerCase().includes("networkerror")) {
+    return "Local vocab service is not reachable. Open Da Wang lookup, then try again.";
+  }
+  if (message.toLowerCase().includes("local vocab app is not running")) {
+    return "Open Da Wang lookup first, then try again.";
+  }
+  if (message.toLowerCase().includes("lookup timed out")) {
+    return "Lookup is taking too long. Check that Da Wang lookup is open, then try again.";
+  }
   if (message.toLowerCase().includes("extension context invalidated")) {
-    return "Extension was reloaded. Refresh this page, then select the term again.";
+    return "The extension was refreshed. Refresh this webpage once, then select the term again.";
   }
-  return message || "Extension lookup failed. Reload the extension and refresh this page.";
-}
-
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<T>((_, reject) => {
-        timeoutId = setTimeout(() => reject(new Error("Lookup is taking longer than expected. Try again in a moment.")), timeoutMs);
-      })
-    ]);
-  } finally {
-    if (timeoutId) clearTimeout(timeoutId);
-  }
+  return message || "Lookup failed. Open Da Wang lookup, then try again.";
 }
 
 function showLookupPanel(data: {

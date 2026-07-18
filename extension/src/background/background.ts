@@ -16,19 +16,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
-  if (message?.type === "VOCAB_LOOKUP_SAVE") {
-    lookupAndSaveVocab(message.term)
-      .then(sendResponse)
-      .catch((error) => {
-        sendResponse({
-          ok: false,
-          error: error instanceof Error ? error.message : "Unable to look up vocabulary"
-        });
-      });
-
-    return true;
-  }
-
   if (message?.type !== "REQUEST_CAPTURE") {
     return false;
   }
@@ -116,56 +103,4 @@ async function captureActiveTab(mode: CaptureMode, goal?: string, primaryGoalTra
   });
 
   return await chrome.tabs.sendMessage(tab.id, { type: "CAPTURE_CURRENT_PAGE", mode, goal, primaryGoalTrack, subject });
-}
-
-async function lookupAndSaveVocab(term: unknown) {
-  const cleanTerm = typeof term === "string" ? term.trim() : "";
-  if (!cleanTerm) {
-    throw new Error("No selected term found");
-  }
-
-  const lookupResponse = await fetch(`http://localhost:3333/api/vocab/lookup?term=${encodeURIComponent(cleanTerm)}`);
-  const lookup = await lookupResponse.json();
-  if (!lookupResponse.ok) {
-    throw new Error(lookup?.error || "Vocabulary lookup failed");
-  }
-
-  if (lookup?.found) {
-    try {
-      const saveResult = await saveLookupEntry(lookup);
-      return {
-        ok: true,
-        result: lookup,
-        saveStatus: saveResult.created ? "saved" : "alreadySaved"
-      };
-    } catch (error) {
-      return {
-        ok: true,
-        result: lookup,
-        saveStatus: "failed",
-        saveError: error instanceof Error ? error.message : "Unable to save vocabulary"
-      };
-    }
-  }
-
-  return {
-    ok: true,
-    result: lookup,
-    saveStatus: "skipped"
-  };
-}
-
-async function saveLookupEntry(lookup: unknown): Promise<{ created: boolean }> {
-  const saveResponse = await fetch("http://localhost:3333/api/vocab/lookup/save-entry", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(lookup)
-  });
-  const saveResult = await saveResponse.json().catch(() => ({}));
-  if (!saveResponse.ok) {
-    throw new Error(typeof saveResult?.error === "string" ? saveResult.error : "Vocabulary save failed");
-  }
-  return { created: Boolean(saveResult?.created) };
 }
