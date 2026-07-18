@@ -46,6 +46,14 @@ bad line without separator
   assert.equal(builtInDefinition.failed.length, 0);
   assert.equal(builtInDefinition.entries[0].definition, "To remove an invalid part of a law while leaving the rest in force.");
 
+  const categoryWordDefinition = parseVocabText("legislature\t立法机关\tConstitutional Law");
+  assert.equal(categoryWordDefinition.entries.length, 1);
+  assert.equal(categoryWordDefinition.entries[0].definition, "The law-making body of a jurisdiction.");
+
+  const malformedDefinition = parseVocabText("bad entry - The law-making body of a .");
+  assert.equal(malformedDefinition.entries.length, 0);
+  assert.equal(malformedDefinition.failed.length, 1);
+
   const markdownTable = parseVocabText(`
 | **charity / charities** | 慈善机构；慈善事业 | Constitutional Law / Division of Powers |
 | **tavern** | 酒馆；酒吧（法律上指持牌酒类营业场所） | Constitutional Law / Licensing |
@@ -300,9 +308,42 @@ fiduciary duty: A duty to act loyally for another person's interests.
   assert.equal(fourthCorrect.reviewState.nextReviewAt, "2026-09-01");
   assert.equal((await getVocabItems()).stats.mastered, 1);
 
+  await writeFile(process.env.LEGAL_VOCAB_PATH!, JSON.stringify({
+    version: "v0.1",
+    updatedAt: "2026-07-18T12:00:00.000Z",
+    items: [
+      legacyItem("legacy bad", "The law-making body of a ."),
+      legacyItem("valid one", "A valid legal definition used for the first quiz option."),
+      legacyItem("valid two", "A valid legal definition used for the second quiz option."),
+      legacyItem("valid three", "A valid legal definition used for the third quiz option."),
+      legacyItem("valid four", "A valid legal definition used for the fourth quiz option.")
+    ]
+  }), "utf8");
+  const legacyReview = await getVocabReview("2026-07-18", "all");
+  assert.equal(legacyReview.canStart, true);
+  assert.equal(legacyReview.questions.length, 4);
+  assert.equal(legacyReview.questions.some((legacyQuestion) => legacyQuestion.term === "legacy bad"), false);
+  assert.equal(legacyReview.questions.some((legacyQuestion) => legacyQuestion.options.includes("The law-making body of a .")), false);
+
   await rm(tmpDir, { recursive: true, force: true });
   globalThis.fetch = originalFetch;
   console.log("Vocab fixture passed");
+}
+
+function legacyItem(term: string, definition: string) {
+  return {
+    id: term.replace(/\s+/g, "-"),
+    term,
+    definition,
+    sourceText: `${term} - ${definition}`,
+    createdAt: "2026-07-18T12:00:00.000Z",
+    updatedAt: "2026-07-18T12:00:00.000Z",
+    reviewState: {
+      status: "new",
+      correctStreak: 0,
+      wrongCount: 0
+    }
+  };
 }
 
 run().catch(async (error) => {

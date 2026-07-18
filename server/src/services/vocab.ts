@@ -1184,20 +1184,64 @@ function selectDefinitionCell(cells: string[]): string {
 }
 
 function cleanEnglishDefinition(value: string): string {
-  const trimmed = trimCell(value)
+  const raw = trimCell(value);
+  if (isLegalCategoryLabel(raw)) return "";
+
+  const trimmed = raw
     .replace(/\([^)]*[\u3400-\u9fff][^)]*\)/g, "")
     .replace(/（[^）]*[\u3400-\u9fff][^）]*）/g, "")
     .replace(/[\u3400-\u9fff][\u3400-\u9fff\s；;，,、。:：()（）-]*/g, " ")
-    .replace(/\b(?:Constitutional|Administrative|Criminal|Contract|Property|Tort|Legislative|Judicial|General|Legal)\s+(?:Law|Process|Review|Drafting|English)\b/gi, " ")
-    .replace(/\b(?:Litigation|Evidence|Remedies|Equity|Procedure|Jurisdiction)\b/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
 
-  if (!trimmed || containsCjk(trimmed) || !/[a-z]/i.test(trimmed) || !isLikelyEnglishExplanation(trimmed)) {
+  if (!trimmed || containsCjk(trimmed) || !/[a-z]/i.test(trimmed) || !isLikelyEnglishExplanation(trimmed) || looksTruncatedDefinition(trimmed)) {
     return "";
   }
 
   return trimmed;
+}
+
+function isLegalCategoryLabel(value: string): boolean {
+  const words = value
+    .toLowerCase()
+    .replace(/[&/|,;:()（）-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean);
+
+  if (words.length === 0 || words.length > 8) return false;
+
+  const categoryWords = new Set([
+    "administrative",
+    "charter",
+    "constitutional",
+    "contract",
+    "criminal",
+    "division",
+    "drafting",
+    "english",
+    "equity",
+    "evidence",
+    "family",
+    "general",
+    "judicial",
+    "jurisdiction",
+    "law",
+    "legal",
+    "legislative",
+    "licensing",
+    "litigation",
+    "powers",
+    "procedure",
+    "process",
+    "property",
+    "remedies",
+    "review",
+    "tort"
+  ]);
+
+  return words.every((word) => categoryWords.has(word));
 }
 
 function isLikelyEnglishExplanation(value: string): boolean {
@@ -1388,7 +1432,7 @@ function looksLikeReferenceFallback(item: VocabItem): boolean {
   if (!definition) return true;
   if (isClearlyNonLegalReference(item.term, definition)) return true;
   if (definition.length > 260) return true;
-  if (/\b(of|a|the|its|to|with|by|for|under|valid|legal)\s+\./i.test(definition)) return true;
+  if (looksTruncatedDefinition(definition)) return true;
   return false;
 }
 
@@ -1414,11 +1458,25 @@ function sortItems(items: VocabItem[]): VocabItem[] {
 }
 
 function uniqueDefinitions(items: VocabItem[]): string[] {
-  return [...new Set(items.map((item) => item.definition.trim()).filter(Boolean))];
+  return [...new Set(items.map((item) => item.definition.trim()).filter(isQuizDefinitionUsable))];
 }
 
 function hasEnglishDefinition(item: VocabItem): boolean {
-  return Boolean(item.definition) && !containsCjk(item.definition) && isLikelyEnglishExplanation(item.definition);
+  return Boolean(item.definition) && !containsCjk(item.definition) && isLikelyEnglishExplanation(item.definition) && isQuizDefinitionUsable(item.definition);
+}
+
+function isQuizDefinitionUsable(definition: string): boolean {
+  const cleanDefinition = definition.trim();
+  return cleanDefinition.length >= 12 && !looksTruncatedDefinition(cleanDefinition);
+}
+
+function looksTruncatedDefinition(definition: string): boolean {
+  const cleanDefinition = definition.trim();
+  if (/\b(?:of|a|an|the|its|to|with|by|for|from|under|in|on|or|and|valid|legal|required)\s+\.$/i.test(cleanDefinition)) return true;
+  if (/\b(?:of|a|an|the|its|to|with|by|for|from|under|in|on|or|and|valid|legal|required)\s+[,.]$/i.test(cleanDefinition)) return true;
+  if (/\b(?:of a|of an|of the|for a|for an|for the|to a|to an|to the|in a|in an|in the)\s*\.$/i.test(cleanDefinition)) return true;
+  if (/\s[,.]$/.test(cleanDefinition)) return true;
+  return false;
 }
 
 function containsCjk(value: string): boolean {
