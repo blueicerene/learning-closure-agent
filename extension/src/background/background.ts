@@ -1,6 +1,24 @@
 import type { CaptureMode, CaptureResponse, GoalTrack } from "../shared/types";
 
 const vocabAppBaseUrl = "http://127.0.0.1:5174/";
+const vocabSelectionMenuId = "lca-vocab-lookup-selection";
+
+chrome.runtime.onInstalled.addListener(() => {
+  installContextMenus();
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  installContextMenus();
+});
+
+chrome.contextMenus.onClicked.addListener((info) => {
+  if (info.menuItemId !== vocabSelectionMenuId) return;
+
+  const selectedText = normalizeLookupText(info.selectionText || "");
+  if (!selectedText) return;
+
+  openLookupTerm(selectedText).catch(() => undefined);
+});
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === "VOCAB_OPEN_IMAGE_LOOKUP") {
@@ -32,6 +50,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return true;
 });
 
+function installContextMenus() {
+  chrome.contextMenus.remove(vocabSelectionMenuId, () => {
+    chrome.runtime.lastError;
+    chrome.contextMenus.create({
+      id: vocabSelectionMenuId,
+      title: "大王查词：%s",
+      contexts: ["selection"]
+    });
+  });
+}
+
 async function openImageLookup(message: unknown): Promise<{ ok: true; key: string }> {
   const payload = message as { name?: unknown; mimeType?: unknown; dataUrl?: unknown };
   const dataUrl = typeof payload.dataUrl === "string" ? payload.dataUrl : "";
@@ -52,6 +81,11 @@ async function openImageLookup(message: unknown): Promise<{ ok: true; key: strin
   await openOrReuseVocabAppTab(`${vocabAppBaseUrl}?imageLookup=${encodeURIComponent(key)}`);
 
   return { ok: true, key };
+}
+
+async function openLookupTerm(term: string) {
+  await ensureVocabAppIsRunning();
+  await openOrReuseVocabAppTab(`${vocabAppBaseUrl}?term=${encodeURIComponent(term)}&autoLookup=1`);
 }
 
 async function ensureVocabAppIsRunning() {
@@ -89,6 +123,15 @@ async function openOrReuseVocabAppTab(url: string) {
   if (typeof existingTab.windowId === "number") {
     await chrome.windows.update(existingTab.windowId, { focused: true });
   }
+}
+
+function normalizeLookupText(text: string): string {
+  return text
+    .replace(/\s+/g, " ")
+    .replace(/[“”"']/g, "")
+    .replace(/^[^A-Za-z]+|[^A-Za-z]+$/g, "")
+    .trim()
+    .slice(0, 80);
 }
 
 async function captureActiveTab(mode: CaptureMode, goal?: string, primaryGoalTrack?: GoalTrack, subject?: string): Promise<CaptureResponse> {

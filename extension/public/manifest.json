@@ -3,7 +3,7 @@
   "name": "Learning Closure Agent",
   "version": "0.1.0",
   "description": "Close a learning session with summary, knowledge cards, and next actions.",
-  "permissions": ["activeTab", "scripting", "storage"],
+  "permissions": ["activeTab", "contextMenus", "scripting", "storage"],
   "host_permissions": [
     "http://localhost:3333/*",
     "http://localhost:5174/*",

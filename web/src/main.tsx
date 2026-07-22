@@ -230,6 +230,19 @@ function App() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    if (params.get("imageLookup") || params.get("desktopImageLookup")) return;
+
+    const term = (params.get("term") || params.get("lookupTerm") || "").trim();
+    if (!term) return;
+
+    setTab("dictionary");
+    setLookupTerm(term);
+    void lookupDictionary(term);
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
     const imageKey = params.get("desktopImageLookup");
     if (!imageKey) return;
 
