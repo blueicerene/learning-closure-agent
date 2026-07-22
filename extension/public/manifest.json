@@ -8,6 +8,7 @@
     "http://localhost:3333/*",
     "http://localhost:5174/*",
     "http://127.0.0.1:5174/*",
+    "file:///*",
     "https://chatgpt.com/*",
     "https://notebooklm.google.com/*",
     "https://eclass.yorku.ca/*",
@@ -31,6 +32,8 @@
   "content_scripts": [
     {
       "matches": [
+        "file:///*",
+        "https://chatgpt.com/*",
         "https://notebooklm.google.com/*",
         "https://eclass.yorku.ca/*",
         "https://www.canlii.org/*",

@@ -107,6 +107,7 @@ npm --workspace extension run build
 3. Click Load unpacked.
 4. Select `extension/dist`.
 5. Pin Learning Closure Agent.
+6. For local PDF files opened from your computer, open the extension details and enable `Allow access to file URLs`.
 
 ## Mock Mode 使用方法 / Mock Mode
 
@@ -164,16 +165,18 @@ The quiz shows one English term and four English definitions. Wrong answers ente
 
 Vocabulary data is saved locally in `output/legal-vocab.json` and must not be committed.
 
-### NotebookLM selected word lookup
+### Webpage and PDF selected word lookup
 
-After loading the Chrome extension, NotebookLM pages support selected word lookup:
+After loading the Chrome extension, supported study pages can look up selected legal English words:
 
 1. Start the local backend with `npm run dev:server`.
-2. Open NotebookLM in Chrome.
+2. Open NotebookLM, ChatGPT, eClass, CanLII, a supported legal website, or a local PDF in Chrome.
 3. Select an English legal word or short phrase.
 4. Click the floating `Look up` button.
 
 The extension sends only the selected word or short phrase to the local backend, shows English and Chinese definitions in a small page popup, and automatically saves the word into tomorrow's local vocab review queue.
+
+Local PDFs use Chrome's file URL permission. If the floating button does not appear on a `file://` PDF, confirm `Allow access to file URLs` is enabled for the unpacked extension and refresh the PDF tab.
 
 ### Desktop image word lookup / 大王拖拽入口
 

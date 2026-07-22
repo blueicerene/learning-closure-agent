@@ -80,8 +80,19 @@ Captured content 会发送到本地 server。只有在 `USE_MOCK_LLM=false` 时�
 当前 host permissions：
 
 - `http://localhost:3333/*`
+- `http://localhost:5174/*`
+- `http://127.0.0.1:5174/*`
+- `file:///*`（仅用于用户手动打开的本地 PDF / study files；Chrome 仍需用户在 extension details 中启用 file URL access）
 - `https://chatgpt.com/*`
 - `https://notebooklm.google.com/*`
+- `https://eclass.yorku.ca/*`
+- `https://www.canlii.org/*`
+- `https://canlii.org/*`
+- `https://laws-lois.justice.gc.ca/*`
+- `https://www.justice.gc.ca/*`
+- `https://www.scc-csc.ca/*`
+- `https://decisions.scc-csc.ca/*`
+- `https://www.ontario.ca/laws/*`
 - `https://www.youtube.com/*`
 
 没有申请：
