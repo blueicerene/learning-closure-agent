@@ -1,11 +1,20 @@
 # Learning Closure Agent
 
-本地优先的一键学习收尾 Agent。  
-A local-first AI workflow agent that helps learners close their study sessions.
+本地优先的法律英语学习工作台：在网页、PDF 与截图中查词，生成中英双语法律释义，自动加入间隔复习，并由桌面宠物“大王”提示学习节奏。
 
-当学习发生在 ChatGPT、NotebookLM、PDF、网页、播客文本和 Obsidian 之间时，学习上下文很容易散掉。Learning Closure Agent v0.1 的目标很小：在一次学习结束时，捕获当前内容，生成学习总结、关键知识点、未解决问题、下一步行动，并保存为本地 Markdown。
+A local-first legal English learning workspace for bilingual dictionary lookup from webpages, PDFs, and screenshots, automatic spaced review, and a learning-aware macOS companion named Da Wang.
 
-When learning is scattered across ChatGPT, NotebookLM, PDFs, web pages, podcast transcripts, and Obsidian, context is easy to lose. Learning Closure Agent v0.1 captures the current learning session, generates a closure, and saves it locally as Markdown.
+项目同时保留最初的学习收尾能力：捕获一次学习会话，生成总结、关键知识、未解决问题与下一步行动，并保存为本地 Markdown。所有词库、复习状态和学习记录默认留在本机。
+
+## 当前产品 / Current Product
+
+- 在线法律英语查词，固定返回中文释义、英文释义与法律语境。
+- 网页、NotebookLM、ChatGPT 和本地 PDF 选词查询。
+- 单词截图 OCR；拖入“大王”后自动识别、查询并进入词库。
+- 四选一英文释义测试与 Ebbinghaus 风格间隔复习。
+- 今日新增、待复习、连续学习天数和法律词掌握率。
+- 透明、可拖动的 macOS 桌面宠物，按待复习、答对和连续错题切换状态。
+- 本地学习会话收尾、Markdown 输出与 Learning Standard 进度骨架。
 
 ## 项目解决的问题 / Problem
 
@@ -338,7 +347,7 @@ status: "inbox"
 
 ## Roadmap
 
-v0.2 已完成：Learning Standard & Progress Backbone。
+v0.2 已完成：Learning Standard、法律英语词库、复习流程与多入口学习助手。
 
 - multi-source Learning Standard structure
 - progress tracked by `standardId`
@@ -346,9 +355,11 @@ v0.2 已完成：Learning Standard & Progress Backbone。
 - Chinese `Learning Progress Summary.md`
 - `GET /api/progress`
 - Section 91 / Section 92 real closure validation
+- online bilingual legal dictionary with AI legal enrichment
+- OCR, webpage, PDF and desktop-drop entry points
+- local vocabulary library and Ebbinghaus-style review scheduling
+- Chrome study helper and learning-aware macOS companion
 
-v0.3 暂停：不继续扩展 Review Queue / Today Plan / Bar or NCA planner。
+后续不扩展为自动处理受限制考试材料的 Bar / NCA planner。考试机构和学习材料许可可能限制将授权材料输入、上传或传输到生成式 AI 工具；任何进一步的考试规划功能都必须先完成来源许可和合规边界设计。
 
-原因：考试机构和学习材料许可可能限制将授权材料输入、上传或传输到生成式 AI 工具。继续扩展学习计划、复习队列或考试材料处理功能前，必须先完成来源许可和合规边界设计。
-
-当前项目作为 v0.2 稳定原型收口：local-first capture, closure, Markdown export, and learning progress backbone for permitted content only.
+当前产品定位：local-first legal English learning workspace and study-session closure layer for content the user is permitted to process.
