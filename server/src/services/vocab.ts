@@ -82,6 +82,20 @@ export type VocabStats = {
   needsReview: number;
 };
 
+export type LearningStatus = {
+  generatedAt: string;
+  todayAdded: number;
+  dueToday: number;
+  learningStreakDays: number;
+  masteryRate: number;
+  mastered: number;
+  total: number;
+  repeatedWrong: number;
+  petState: "idle" | "due" | "encourage" | "focus";
+  message: string;
+  reviewUrl: string;
+};
+
 export type QualityBackfillResult = {
   scanned: number;
   updated: number;
@@ -615,6 +629,57 @@ export async function getVocabItems(): Promise<{ items: VocabItem[]; stats: Voca
   return {
     items: sortItems(store.items),
     stats: getStats(store.items, todayKey())
+  };
+}
+
+export async function getLearningStatus(): Promise<LearningStatus> {
+  const store = await readStore();
+  const now = new Date();
+  const today = dateKey(now.toISOString());
+  const todayAdded = store.items.filter((item) => dateKey(item.createdAt) === today).length;
+  const dueToday = store.items.filter((item) => isDue(item, today)).length;
+  const mastered = store.items.filter((item) => item.reviewState.status === "mastered").length;
+  const repeatedWrong = store.items.filter((item) =>
+    item.reviewState.status !== "mastered"
+    && item.reviewState.lastResult === "wrong"
+    && item.reviewState.wrongCount >= 2
+  ).length;
+  const recentAnswer = [...store.items]
+    .filter((item) => item.reviewState.lastResult && item.updatedAt)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+  const recentAnswerAge = recentAnswer ? now.valueOf() - new Date(recentAnswer.updatedAt).valueOf() : Number.POSITIVE_INFINITY;
+  const isRecentAnswer = recentAnswerAge >= 0 && recentAnswerAge <= 5 * 60 * 1000;
+
+  let petState: LearningStatus["petState"] = "idle";
+  if (isRecentAnswer && recentAnswer?.reviewState.lastResult === "wrong" && recentAnswer.reviewState.wrongCount >= 2) {
+    petState = "focus";
+  } else if (isRecentAnswer && recentAnswer?.reviewState.lastResult === "correct") {
+    petState = "encourage";
+  } else if (dueToday > 0) {
+    petState = "due";
+  }
+
+  const message = {
+    idle: todayAdded > 0 ? `今日新增 ${todayAdded}` : "拖图片查词",
+    due: `待复习 ${dueToday}`,
+    encourage: "答对了，继续！",
+    focus: `重点复习 ${repeatedWrong || 1}`
+  }[petState];
+
+  return {
+    generatedAt: now.toISOString(),
+    todayAdded,
+    dueToday,
+    learningStreakDays: calculateLearningStreak(store.items, today),
+    masteryRate: store.items.length === 0 ? 0 : Math.round((mastered / store.items.length) * 100),
+    mastered,
+    total: store.items.length,
+    repeatedWrong,
+    petState,
+    message,
+    reviewUrl: dueToday > 0
+      ? "http://127.0.0.1:5174/?view=quiz"
+      : "http://127.0.0.1:5174/"
   };
 }
 
@@ -1535,6 +1600,24 @@ function getStats(items: VocabItem[], date: string): VocabStats {
     mastered: items.filter((item) => item.reviewState.status === "mastered").length,
     needsReview: items.filter(needsDefinitionReview).length
   };
+}
+
+function calculateLearningStreak(items: VocabItem[], today: string): number {
+  const activityDates = new Set<string>();
+  for (const item of items) {
+    activityDates.add(dateKey(item.createdAt));
+    if (item.reviewState.lastReviewedAt) {
+      activityDates.add(dateKey(item.reviewState.lastReviewedAt));
+    }
+  }
+
+  let cursor = activityDates.has(today) ? today : addDays(today, -1);
+  let streak = 0;
+  while (activityDates.has(cursor)) {
+    streak += 1;
+    cursor = addDays(cursor, -1);
+  }
+  return streak;
 }
 
 function needsDefinitionReview(item: VocabItem): boolean {

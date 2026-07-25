@@ -53,6 +53,20 @@ type ItemsResponse = {
   stats: VocabStats;
 };
 
+type LearningStatus = {
+  generatedAt: string;
+  todayAdded: number;
+  dueToday: number;
+  learningStreakDays: number;
+  masteryRate: number;
+  mastered: number;
+  total: number;
+  repeatedWrong: number;
+  petState: "idle" | "due" | "encourage" | "focus";
+  message: string;
+  reviewUrl: string;
+};
+
 type ImportFailure = {
   line: number;
   text: string;
@@ -159,6 +173,19 @@ function App() {
   const [tab, setTab] = useState<Tab>("dictionary");
   const [items, setItems] = useState<VocabItem[]>([]);
   const [stats, setStats] = useState<VocabStats>({ total: 0, dueToday: 0, tomorrow: 0, wrong: 0, learning: 0, reviewed: 0, mastered: 0, needsReview: 0 });
+  const [learningStatus, setLearningStatus] = useState<LearningStatus>({
+    generatedAt: "",
+    todayAdded: 0,
+    dueToday: 0,
+    learningStreakDays: 0,
+    masteryRate: 0,
+    mastered: 0,
+    total: 0,
+    repeatedWrong: 0,
+    petState: "idle",
+    message: "Ready",
+    reviewUrl: "http://127.0.0.1:5174/"
+  });
   const [review, setReview] = useState<ReviewResponse | null>(null);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [feedback, setFeedback] = useState<AnswerFeedback | null>(null);
@@ -231,6 +258,11 @@ function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("imageLookup") || params.get("desktopImageLookup")) return;
+
+    if (params.get("view") === "quiz") {
+      setTab("quiz");
+      return;
+    }
 
     const term = (params.get("term") || params.get("lookupTerm") || "").trim();
     if (!term) return;
@@ -305,7 +337,7 @@ function App() {
 
   async function refreshAll() {
     setError("");
-    await Promise.all([loadItems(), loadReview()]);
+    await Promise.all([loadItems(), loadReview(), loadLearningStatus()]);
   }
 
   async function loadItems() {
@@ -328,6 +360,14 @@ function App() {
       setFeedback(null);
       setQuizComplete(false);
       setStatus(quizStatus(mode));
+    } catch (err) {
+      showError(err);
+    }
+  }
+
+  async function loadLearningStatus() {
+    try {
+      setLearningStatus(await request<LearningStatus>("/api/vocab/learning-status"));
     } catch (err) {
       showError(err);
     }
@@ -595,7 +635,7 @@ function App() {
           isCorrect
         })
       });
-      await loadItems();
+      await Promise.all([loadItems(), loadLearningStatus()]);
     } catch (err) {
       showError(err);
     }
@@ -659,12 +699,19 @@ function App() {
       </header>
 
       <section className="stats-grid" aria-label="Vocabulary stats">
-        <Stat label="Tomorrow" value={stats.tomorrow} />
-        <Stat label="Wrong" value={stats.wrong} />
-        <Stat label="Needs review" value={stats.needsReview} />
-        <Stat label="Learning" value={stats.learning} />
-        <Stat label="Mastered" value={stats.mastered} />
+        <Stat label="Added today" value={learningStatus.todayAdded} />
+        <Stat label="Due today" value={learningStatus.dueToday} />
+        <Stat label="Learning streak" value={`${learningStatus.learningStreakDays}d`} />
+        <Stat label="Legal mastery" value={`${learningStatus.masteryRate}%`} />
       </section>
+      {learningStatus.repeatedWrong > 0 && (
+        <button className="review-nudge" onClick={() => {
+          setTab("quiz");
+          void loadReview("wrong");
+        }}>
+          大王提醒：有 {learningStatus.repeatedWrong} 个词需要重点复习
+        </button>
+      )}
 
       <nav className="tabs" aria-label="Views">
         <button className={tab === "dictionary" ? "active" : ""} onClick={() => setTab("dictionary")}>Dictionary</button>
@@ -1122,7 +1169,7 @@ function LegalNotePanel({ note }: { note: LegalEnglishNote }) {
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function Stat({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="stat">
       <span>{label}</span>
@@ -1175,14 +1222,19 @@ function ImportSummary({ result }: { result: ImportResult }) {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
-    ...init,
-    cache: "no-store",
-    headers: {
-      "Content-Type": "application/json",
-      ...init?.headers
-    }
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${apiBaseUrl}${path}`, {
+      ...init,
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+        ...init?.headers
+      }
+    });
+  } catch {
+    throw new Error("Local learning service is not running. Open 大王查词 from the Desktop, then try again.");
+  }
   const data = await response.json();
   if (!response.ok) {
     throw new Error(data?.error || "Request failed");

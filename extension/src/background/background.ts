@@ -2,6 +2,7 @@ import type { CaptureMode, CaptureResponse, GoalTrack } from "../shared/types";
 
 const vocabAppBaseUrl = "http://127.0.0.1:5174/";
 const vocabSelectionMenuId = "lca-vocab-lookup-selection";
+const vocabReviewMenuId = "lca-vocab-open-review";
 
 chrome.runtime.onInstalled.addListener(() => {
   installContextMenus();
@@ -12,6 +13,10 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 chrome.contextMenus.onClicked.addListener((info) => {
+  if (info.menuItemId === vocabReviewMenuId) {
+    openTodayReview().catch(() => undefined);
+    return;
+  }
   if (info.menuItemId !== vocabSelectionMenuId) return;
 
   const selectedText = normalizeLookupText(info.selectionText || "");
@@ -21,6 +26,16 @@ chrome.contextMenus.onClicked.addListener((info) => {
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type === "VOCAB_OPEN_TODAY_REVIEW") {
+    openTodayReview()
+      .then(() => sendResponse({ ok: true }))
+      .catch((error) => sendResponse({
+        ok: false,
+        error: error instanceof Error ? error.message : "Unable to open today review"
+      }));
+    return true;
+  }
+
   if (message?.type === "VOCAB_OPEN_IMAGE_LOOKUP") {
     openImageLookup(message)
       .then(sendResponse)
@@ -59,6 +74,14 @@ function installContextMenus() {
       contexts: ["selection"]
     });
   });
+  chrome.contextMenus.remove(vocabReviewMenuId, () => {
+    chrome.runtime.lastError;
+    chrome.contextMenus.create({
+      id: vocabReviewMenuId,
+      title: "大王：开始今日复习",
+      contexts: ["page", "selection"]
+    });
+  });
 }
 
 async function openImageLookup(message: unknown): Promise<{ ok: true; key: string }> {
@@ -88,19 +111,24 @@ async function openLookupTerm(term: string) {
   await openOrReuseVocabAppTab(`${vocabAppBaseUrl}?term=${encodeURIComponent(term)}&autoLookup=1`);
 }
 
+async function openTodayReview() {
+  await ensureVocabAppIsRunning();
+  await openOrReuseVocabAppTab(`${vocabAppBaseUrl}?view=quiz`);
+}
+
 async function ensureVocabAppIsRunning() {
   const controller = new AbortController();
-  const timeout = globalThis.setTimeout(() => controller.abort(), 900);
+  const timeout = globalThis.setTimeout(() => controller.abort(), 1200);
   try {
-    const response = await fetch(vocabAppBaseUrl, {
-      cache: "no-store",
-      signal: controller.signal
-    });
-    if (!response.ok) {
-      throw new Error(`Unexpected response ${response.status}`);
+    const responses = await Promise.all([
+      fetch(vocabAppBaseUrl, { cache: "no-store", signal: controller.signal }),
+      fetch("http://127.0.0.1:3333/health", { cache: "no-store", signal: controller.signal })
+    ]);
+    if (responses.some((response) => !response.ok)) {
+      throw new Error("Unexpected local service response");
     }
   } catch {
-    throw new Error("Local vocab app is not running. Start the web app, then drag the image again.");
+    throw new Error("大王查词 is not running. Double-click 大王查词 on the Desktop, then try again.");
   } finally {
     globalThis.clearTimeout(timeout);
   }

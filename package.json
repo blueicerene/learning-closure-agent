@@ -11,7 +11,8 @@
     "dev:server": "npm --workspace server run dev",
     "dev:extension": "npm --workspace extension run dev",
     "dev:web": "npm --workspace web run dev",
-    "dev:dropper": "swift desktop-dropper/LegalVocabDropper.swift",
+    "dev:dropper": "scripts/run-codex-pet.sh",
+    "test:pet": "scripts/run-codex-pet.sh --self-test",
     "build": "npm --workspaces run build"
   }
 }

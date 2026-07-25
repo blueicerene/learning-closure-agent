@@ -10,6 +10,7 @@ rm -rf "$APP_PATH" "$ICONSET"
 mkdir -p "$ICONSET"
 
 swift "$PROJECT_DIR/scripts/make-da-wang-app-icon.swift" >/dev/null
+"$PROJECT_DIR/scripts/build-codex-pet-binary.sh" >/dev/null
 
 sips -z 16 16 "$ICON_PNG" --out "$ICONSET/icon_16x16.png" >/dev/null
 sips -z 32 32 "$ICON_PNG" --out "$ICONSET/icon_16x16@2x.png" >/dev/null

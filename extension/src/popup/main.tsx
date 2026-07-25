@@ -14,6 +14,13 @@ import "./styles.css";
 
 type Status = "idle" | "capturing" | "closing" | "ready" | "saving" | "saved" | "error";
 
+type LearningStatus = {
+  todayAdded: number;
+  dueToday: number;
+  learningStreakDays: number;
+  masteryRate: number;
+};
+
 const apiBaseUrl = "http://localhost:3333";
 
 function Popup() {
@@ -28,9 +35,11 @@ function Popup() {
   const [lastAction, setLastAction] = useState<LastActionResponse | null>(null);
   const [error, setError] = useState("");
   const [savedPath, setSavedPath] = useState("");
+  const [learningStatus, setLearningStatus] = useState<LearningStatus | null>(null);
 
   useEffect(() => {
     loadLastAction();
+    loadLearningStatus();
   }, []);
 
   const subjectOptions = subjects[primaryGoalTrack];
@@ -60,6 +69,22 @@ function Popup() {
       }
     } catch {
       setLastAction(null);
+    }
+  }
+
+  async function loadLearningStatus() {
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/vocab/learning-status`, { cache: "no-store" });
+      setLearningStatus(response.ok ? await response.json() : null);
+    } catch {
+      setLearningStatus(null);
+    }
+  }
+
+  async function openTodayReview() {
+    const response = await chrome.runtime.sendMessage({ type: "VOCAB_OPEN_TODAY_REVIEW" }) as { ok?: boolean; error?: string };
+    if (!response?.ok) {
+      showError(new Error(response?.error || "Open 大王查词 from the Desktop, then try again."));
     }
   }
 
@@ -218,6 +243,26 @@ function Popup() {
         </div>
         <span className={`status status-${status}`}>{status}</span>
       </header>
+
+      <section className="vocab-summary">
+        <div>
+          <strong>{learningStatus?.dueToday ?? "–"}</strong>
+          <span>Due</span>
+        </div>
+        <div>
+          <strong>{learningStatus?.todayAdded ?? "–"}</strong>
+          <span>Added</span>
+        </div>
+        <div>
+          <strong>{learningStatus ? `${learningStatus.learningStreakDays}d` : "–"}</strong>
+          <span>Streak</span>
+        </div>
+        <div>
+          <strong>{learningStatus ? `${learningStatus.masteryRate}%` : "–"}</strong>
+          <span>Mastery</span>
+        </div>
+        <button onClick={() => void openTodayReview()}>Today Practice</button>
+      </section>
 
       {lastAction?.hasLastAction && (
         <section className="last-action">

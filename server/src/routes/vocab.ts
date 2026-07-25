@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   backfillVocabQuality,
   deleteVocabItem,
+  getLearningStatus,
   getVocabItems,
   getVocabReview,
   importVocabText,
@@ -39,6 +40,14 @@ function pruneDesktopImageLookups() {
 vocabRouter.get("/items", async (_req, res, next) => {
   try {
     res.json(await getVocabItems());
+  } catch (error) {
+    next(error);
+  }
+});
+
+vocabRouter.get("/learning-status", async (_req, res, next) => {
+  try {
+    res.json(await getLearningStatus());
   } catch (error) {
     next(error);
   }

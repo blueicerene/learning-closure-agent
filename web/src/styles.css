@@ -131,6 +131,20 @@ h3 {
   margin-bottom: 18px;
 }
 
+.review-nudge {
+  background: #fff3d6;
+  border: 1px solid #e3c878;
+  color: #654900;
+  margin: 0 0 18px;
+  min-height: 46px;
+  text-align: left;
+  width: 100%;
+}
+
+.review-nudge:hover:not(:disabled) {
+  background: #f9e8b7;
+}
+
 .stat {
   background: #fff;
   border: 1px solid #dfe4e8;

@@ -1,6 +1,8 @@
 node_modules
 dist
 .npm-cache
+.runtime-bin
+codex-pet/
 .env
 .DS_Store
 *.log

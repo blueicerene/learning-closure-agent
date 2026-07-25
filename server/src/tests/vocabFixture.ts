@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import {
   backfillVocabQuality,
+  getLearningStatus,
   getVocabItems,
   getVocabReview,
   importVocabText,
@@ -346,6 +347,104 @@ fiduciary duty: A duty to act loyally for another person's interests.
   assert.equal(repairedReview.questions.length, 4);
   const repairedCustody = (await getVocabItems()).items.find((item) => item.term === "custody");
   assert.equal(repairedCustody?.definition, "The state of being kept under legal restraint.");
+
+  const now = new Date().toISOString();
+  const today = now.slice(0, 10);
+  await writeFile(process.env.LEGAL_VOCAB_PATH!, JSON.stringify({
+    version: "v0.1",
+    updatedAt: now,
+    items: [
+      {
+        ...legacyItem("focus term", "A legal definition for a term needing focused review."),
+        createdAt: now,
+        updatedAt: now,
+        reviewState: {
+          status: "learning",
+          correctStreak: 0,
+          wrongCount: 2,
+          lastResult: "wrong",
+          lastReviewedAt: today,
+          nextReviewAt: today
+        }
+      },
+      {
+        ...legacyItem("mastered term", "A legal definition for a mastered vocabulary term."),
+        createdAt: now,
+        updatedAt: now,
+        reviewState: {
+          status: "mastered",
+          correctStreak: 4,
+          wrongCount: 0,
+          lastResult: "correct",
+          lastReviewedAt: today,
+          nextReviewAt: "2099-01-01"
+        }
+      }
+    ]
+  }), "utf8");
+  const learningStatus = await getLearningStatus();
+  assert.equal(learningStatus.todayAdded, 2);
+  assert.equal(learningStatus.dueToday, 1);
+  assert.equal(learningStatus.learningStreakDays, 1);
+  assert.equal(learningStatus.masteryRate, 50);
+  assert.equal(learningStatus.repeatedWrong, 1);
+  assert.equal(learningStatus.petState, "focus");
+
+  const staleWrongAt = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  await writeFile(process.env.LEGAL_VOCAB_PATH!, JSON.stringify({
+    version: "v0.1",
+    updatedAt: staleWrongAt,
+    items: [
+      {
+        ...legacyItem("stale wrong", "A due legal term with an older repeated mistake."),
+        createdAt: staleWrongAt,
+        updatedAt: staleWrongAt,
+        reviewState: {
+          status: "learning",
+          correctStreak: 0,
+          wrongCount: 3,
+          lastResult: "wrong",
+          lastReviewedAt: today,
+          nextReviewAt: today
+        }
+      }
+    ]
+  }), "utf8");
+  const staleWrongStatus = await getLearningStatus();
+  assert.equal(staleWrongStatus.repeatedWrong, 1);
+  assert.equal(staleWrongStatus.dueToday, 1);
+  assert.equal(staleWrongStatus.petState, "due");
+
+  await writeFile(process.env.LEGAL_VOCAB_PATH!, JSON.stringify({
+    version: "v0.1",
+    updatedAt: now,
+    items: [
+      {
+        ...legacyItem("recent correct", "A legal term answered correctly just now."),
+        createdAt: now,
+        updatedAt: now,
+        reviewState: {
+          status: "review",
+          correctStreak: 1,
+          wrongCount: 0,
+          lastResult: "correct",
+          lastReviewedAt: today,
+          nextReviewAt: today
+        }
+      }
+    ]
+  }), "utf8");
+  const recentCorrectStatus = await getLearningStatus();
+  assert.equal(recentCorrectStatus.petState, "encourage");
+
+  await writeFile(process.env.LEGAL_VOCAB_PATH!, JSON.stringify({
+    version: "v0.1",
+    updatedAt: now,
+    items: []
+  }), "utf8");
+  const idleStatus = await getLearningStatus();
+  assert.equal(idleStatus.dueToday, 0);
+  assert.equal(idleStatus.petState, "idle");
 
   await rm(tmpDir, { recursive: true, force: true });
   globalThis.fetch = originalFetch;

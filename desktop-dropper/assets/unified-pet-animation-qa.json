@@ -1,0 +1,524 @@
+{
+  "ok": true,
+  "frameDurationMs": 110,
+  "minimumFirstFrameDifference": 8.0,
+  "states": {
+    "idle": {
+      "frameCount": 12,
+      "size": [
+        300,
+        352
+      ],
+      "topAnchorCenterSpanPx": 6.5,
+      "transparentCorners": true,
+      "motionFrames": 12,
+      "masterSource": "state-idle-master.png",
+      "rigTrack": {
+        "ballX": [
+          0,
+          14,
+          24,
+          28,
+          24,
+          14,
+          0,
+          -14,
+          -24,
+          -28,
+          -24,
+          -14
+        ],
+        "ballRotationDegrees": [
+          0.0,
+          6.5,
+          11.26,
+          13.0,
+          11.26,
+          6.5,
+          0.0,
+          -6.5,
+          -11.26,
+          -13.0,
+          -11.26,
+          -6.5
+        ],
+        "pawRotationDegrees": [
+          -0.0,
+          -2.75,
+          -4.76,
+          -5.5,
+          -4.76,
+          -2.75,
+          -0.0,
+          2.75,
+          4.76,
+          5.5,
+          4.76,
+          2.75
+        ]
+      }
+    },
+    "curious": {
+      "frameCount": 12,
+      "size": [
+        300,
+        352
+      ],
+      "topAnchorCenterSpanPx": 1.5,
+      "transparentCorners": true,
+      "motionFrames": 12,
+      "masterSource": "state-curious-master.png",
+      "rigTrack": {
+        "headRotationDegrees": [
+          0.0,
+          1.6,
+          2.77,
+          3.2,
+          2.77,
+          1.6,
+          0.0,
+          -1.6,
+          -2.77,
+          -3.2,
+          -2.77,
+          -1.6
+        ]
+      }
+    },
+    "ready": {
+      "frameCount": 12,
+      "size": [
+        300,
+        352
+      ],
+      "topAnchorCenterSpanPx": 1.0,
+      "transparentCorners": true,
+      "motionFrames": 12,
+      "masterSource": "state-ready-master.png",
+      "rigTrack": {
+        "pawRotationDegrees": [
+          0.0,
+          5.0,
+          8.66,
+          10.0,
+          8.66,
+          5.0,
+          0.0,
+          -5.0,
+          -8.66,
+          -10.0,
+          -8.66,
+          -5.0
+        ]
+      }
+    },
+    "working": {
+      "frameCount": 12,
+      "size": [
+        300,
+        352
+      ],
+      "topAnchorCenterSpanPx": 0.0,
+      "transparentCorners": true,
+      "motionFrames": 12,
+      "masterSource": "state-working-master.png",
+      "rigTrack": {
+        "headRotationDegrees": [
+          0.0,
+          1.4,
+          2.42,
+          2.8,
+          2.42,
+          1.4,
+          0.0,
+          -1.4,
+          -2.42,
+          -2.8,
+          -2.42,
+          -1.4
+        ]
+      }
+    },
+    "success": {
+      "frameCount": 12,
+      "size": [
+        300,
+        352
+      ],
+      "topAnchorCenterSpanPx": 0.5,
+      "transparentCorners": true,
+      "motionFrames": 12,
+      "masterSource": "state-success-master.png",
+      "rigTrack": {
+        "leftPawRotationDegrees": [
+          0.0,
+          3.0,
+          5.2,
+          6.0,
+          5.2,
+          3.0,
+          0.0,
+          -3.0,
+          -5.2,
+          -6.0,
+          -5.2,
+          -3.0
+        ],
+        "rightPawRotationDegrees": [
+          -0.0,
+          -3.0,
+          -5.2,
+          -6.0,
+          -5.2,
+          -3.0,
+          -0.0,
+          3.0,
+          5.2,
+          6.0,
+          5.2,
+          3.0
+        ]
+      }
+    },
+    "failure": {
+      "frameCount": 12,
+      "size": [
+        300,
+        352
+      ],
+      "topAnchorCenterSpanPx": 0.0,
+      "transparentCorners": true,
+      "motionFrames": 12,
+      "masterSource": "state-failure-master.png",
+      "rigTrack": {
+        "headRotationDegrees": [
+          0.0,
+          1.2,
+          2.08,
+          2.4,
+          2.08,
+          1.2,
+          0.0,
+          -1.2,
+          -2.08,
+          -2.4,
+          -2.08,
+          -1.2
+        ]
+      }
+    },
+    "focus": {
+      "frameCount": 12,
+      "size": [
+        300,
+        352
+      ],
+      "topAnchorCenterSpanPx": 1.0,
+      "transparentCorners": true,
+      "motionFrames": 12,
+      "masterSource": "focus-sit-master.png",
+      "rigTrack": {
+        "tailRotationDegrees": [
+          0.0,
+          7.5,
+          12.99,
+          15.0,
+          12.99,
+          7.5,
+          0.0,
+          -7.5,
+          -12.99,
+          -15.0,
+          -12.99,
+          -7.5
+        ]
+      }
+    }
+  },
+  "firstFrameDifferences": {
+    "idle:curious": 51.727,
+    "idle:ready": 52.92,
+    "idle:working": 45.11,
+    "idle:success": 53.146,
+    "idle:failure": 49.836,
+    "idle:focus": 41.941,
+    "curious:ready": 32.729,
+    "curious:working": 37.925,
+    "curious:success": 44.485,
+    "curious:failure": 32.77,
+    "curious:focus": 36.341,
+    "ready:working": 32.602,
+    "ready:success": 46.613,
+    "ready:failure": 27.715,
+    "ready:focus": 35.645,
+    "working:success": 53.408,
+    "working:failure": 27.693,
+    "working:focus": 27.466,
+    "success:failure": 47.903,
+    "success:focus": 51.79,
+    "failure:focus": 31.634
+  },
+  "keyRegionMotion": {
+    "idle": {
+      "span": 56,
+      "directionChanges": 2,
+      "path": [
+        0,
+        14,
+        24,
+        28,
+        24,
+        14,
+        0,
+        -14,
+        -24,
+        -28,
+        -24,
+        -14
+      ],
+      "region": [
+        38,
+        270,
+        118,
+        350
+      ],
+      "differenceCentroids": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          74.36,
+          301.68,
+          23.21
+        ],
+        [
+          77.38,
+          301.22,
+          36.39
+        ],
+        [
+          77.07,
+          301.87,
+          38.88
+        ],
+        [
+          77.38,
+          301.22,
+          36.39
+        ],
+        [
+          74.36,
+          301.68,
+          23.21
+        ],
+        [
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          83.08,
+          296.87,
+          25.35
+        ],
+        [
+          83.72,
+          296.61,
+          36.45
+        ],
+        [
+          84.45,
+          296.2,
+          40.67
+        ],
+        [
+          83.72,
+          296.61,
+          36.45
+        ],
+        [
+          83.08,
+          296.91,
+          25.18
+        ]
+      ],
+      "visiblyMovingFrames": 10
+    },
+    "ready": {
+      "span": 20.0,
+      "directionChanges": 2,
+      "path": [
+        0.0,
+        5.0,
+        8.66,
+        10.0,
+        8.66,
+        5.0,
+        0.0,
+        -5.0,
+        -8.66,
+        -10.0,
+        -8.66,
+        -5.0
+      ],
+      "region": [
+        25,
+        115,
+        132,
+        255
+      ],
+      "differenceCentroids": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          82.67,
+          180.81,
+          11.66
+        ],
+        [
+          84.4,
+          176.06,
+          14.36
+        ],
+        [
+          84.73,
+          176.38,
+          16.34
+        ],
+        [
+          84.4,
+          176.06,
+          14.36
+        ],
+        [
+          82.67,
+          180.81,
+          11.66
+        ],
+        [
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          76.91,
+          153.33,
+          7.88
+        ],
+        [
+          78.38,
+          153.49,
+          10.89
+        ],
+        [
+          78.83,
+          153.09,
+          11.85
+        ],
+        [
+          78.38,
+          153.49,
+          10.89
+        ],
+        [
+          76.91,
+          153.33,
+          7.88
+        ]
+      ],
+      "visiblyMovingFrames": 10
+    },
+    "focus": {
+      "span": 30.0,
+      "directionChanges": 2,
+      "path": [
+        0.0,
+        7.5,
+        12.99,
+        15.0,
+        12.99,
+        7.5,
+        0.0,
+        -7.5,
+        -12.99,
+        -15.0,
+        -12.99,
+        -7.5
+      ],
+      "region": [
+        195,
+        235,
+        300,
+        352
+      ],
+      "differenceCentroids": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          232.44,
+          271.65,
+          7.69
+        ],
+        [
+          232.51,
+          270.17,
+          11.2
+        ],
+        [
+          232.38,
+          270.01,
+          12.36
+        ],
+        [
+          232.51,
+          270.17,
+          11.2
+        ],
+        [
+          232.44,
+          271.65,
+          7.69
+        ],
+        [
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          226.11,
+          280.71,
+          11.53
+        ],
+        [
+          226.64,
+          281.03,
+          16.58
+        ],
+        [
+          227.06,
+          281.07,
+          18.34
+        ],
+        [
+          226.64,
+          281.03,
+          16.58
+        ],
+        [
+          226.11,
+          280.71,
+          11.53
+        ]
+      ],
+      "visiblyMovingFrames": 10
+    }
+  }
+}

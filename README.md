@@ -163,6 +163,15 @@ fiduciary duty: A duty to act loyally for another person's interests.
 
 The quiz shows one English term and four English definitions. Wrong answers enter the local review queue, and correct streaks schedule the next review after 3 / 7 / 14 / 30 days.
 
+The dashboard and all entry points share one learning-status calculation:
+
+- words added today
+- words due today
+- consecutive learning days
+- mastered legal terms as a percentage of the local vocabulary
+
+Open `http://127.0.0.1:5174/?view=quiz` to go directly to today's review. The same status is available from `GET /api/vocab/learning-status`.
+
 Vocabulary data is saved locally in `output/legal-vocab.json` and must not be committed.
 
 ### Webpage and PDF selected word lookup
@@ -176,11 +185,13 @@ After loading the Chrome extension, supported study pages can look up selected l
 
 The extension sends only the selected word or short phrase to the local backend, shows English and Chinese definitions in a small page popup, and automatically saves the word into tomorrow's local vocab review queue.
 
+The page context menu also includes `大王：开始今日复习`, and the extension popup shows the same four learning indicators as the web app. Both reuse the existing local vocab tab.
+
 Local PDFs use Chrome's file URL permission. If the floating button does not appear on a `file://` PDF, confirm `Allow access to file URLs` is enabled for the unpacked extension and refresh the PDF tab.
 
-### Desktop image word lookup / 大王拖拽入口
+### Codex Pet / 大王拖拽识词入口
 
-The project also includes a small macOS desktop drop target for screenshot-based lookup.
+The project also includes a small macOS Codex Pet for screenshot-based lookup. It uses the existing local OCR and legal dictionary workflow, so the pet is the entry point rather than a separate dictionary.
 
 Start the backend and web app first:
 
@@ -201,24 +212,57 @@ For daily use on macOS, build the double-click desktop app:
 scripts/build-da-wang-app.sh
 ```
 
-This creates `/Users/rene/Desktop/大王查词.app` with a Da Wang icon. Double-clicking the app starts the backend, starts the vocab web app if needed, and opens the floating `大王` drop target.
+This creates `/Users/rene/Desktop/大王查词.app` with a Da Wang icon. Double-clicking the app starts the backend, starts the vocab web app if needed, and opens the floating `Codex Pet · 大王`.
+
+The desktop launcher uses a precompiled local `Codex Pet · 大王.app`. It rebuilds when the Pet source or packaged animation assets change, which keeps normal startup fast, reuses one Pet instance, and avoids depending on Swift compilation at every launch. The launcher waits for both the backend and web app health checks before showing the drop target.
 
 The floating `大王` window stays above other windows, remembers its last position, and accepts dragged image files. A typical flow is:
 
 1. Take a screenshot of one English legal word or short phrase.
-2. Drag the image onto the `大王` window or its `Drop` banner.
+2. Drag the image anywhere inside the invisible rectangular area occupied by `大王`.
 3. The app opens the local vocab web page.
 4. OCR reads the word from the image.
-5. The dictionary lookup runs and the word is added to review.
+5. The dictionary lookup runs automatically and the word is added to review.
 
 Current stable behavior:
 
-- `大王` stands and wags his tail.
-- The window can be moved manually.
+- The same validated v2 `大王` Pet is used by Codex and the desktop drop target.
+- Every visible state uses the same confirmed high-fidelity Da Wang identity, fixed canvas, bottom anchor, transparent edge treatment, face, eyes, tabby markings, tuxedo, and lighting. The silhouettes are intentionally distinct: idle stands with a ball, due raises a paw, working looks down, success celebrates, failure lowers his head and ears, and focus sits with a wagging tail.
+- The pet reacts to hover, image drag, lookup progress, success, and failure.
+- The pet also reflects the review rhythm: due-word reminders, encouragement after a correct answer, and a high-fidelity seated tail-wag loop for focused review after repeated wrong answers.
+- Later image drops reuse the existing local vocab tab instead of opening a new tab each time.
+- The native macOS window and its content are visually transparent, so only `大王` is visible.
+- A compact rounded Chinese bubble shows the current state without restoring the old rectangular card: idle asks `有不会的单词吗？`, focused review shows the live due count, and image handoff shows `放心交给我`.
+- State changes preload the incoming first frame and crossfade for 180 ms, preventing abrupt face, size, and anchor jumps.
+- The transparent full-window receiver remains hit-testable: drag the pet to move the window, or drop an image anywhere over its bounds to start lookup.
 - The window is kept visible when clicking the desktop.
-- The visible card and `Drop` banner are intentional because fully transparent macOS windows do not reliably receive image drag events.
+- Double-clicking the pet opens today's review when words are due, otherwise it opens the dictionary. Right-clicking provides explicit dictionary, today-review, and quit actions.
 
 The desktop dropper is local-only. It posts the dragged image to the local backend, receives a temporary handoff key, then opens the local web app with that key.
+
+Learning-state priority is time-sensitive: a correct answer briefly shows encouragement, a newly repeated mistake briefly shows focused review, older repeated mistakes fall back to the normal due state, due words show the reminder state, and an empty queue returns to idle. Historical mistakes therefore cannot permanently lock the Pet in focus.
+
+For visual regression checks, rebuild the deterministic state frames and inspect both the still contact sheet and the animated key-state preview:
+
+```bash
+python3 scripts/build-unified-pet-animations.py
+open desktop-dropper/assets/unified-pet-states-contact.png
+open desktop-dropper/qa/animated/key-states.gif
+```
+
+The generated `unified-pet-animation-qa.json` rejects missing motion, anchor drift, opaque corners, and first-frame pairs whose mean pixel difference is below the visible-state threshold. It also verifies the actual ball, raised-paw, and tail tracks: each must move through a continuous 12-frame direction path with enough visible regional displacement. Individual state GIFs are written to `desktop-dropper/qa/animated/`. A single development state can also be injected without polling learning data:
+
+```bash
+open -na ".runtime-bin/Codex Pet 大王.app" --args --preview-state ready
+```
+
+Run the Codex Pet regression check:
+
+```bash
+npm run test:pet
+```
+
+The check verifies the single 12-frame ball-kick idle loop, every required v2 learning state, and PNG image parsing from the macOS drag pasteboard.
 
 ## 真实 LLM Mode / Real LLM Mode
 
