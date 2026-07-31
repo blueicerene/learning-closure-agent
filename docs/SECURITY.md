@@ -1,12 +1,12 @@
 # 安全说明 / Security
 
-Learning Closure Agent v0.1 是本地优先、用户触发式的学习收尾工具。
+“大王陪你背单词” V2 是本地优先、用户触发式的法律英语查词与间隔复习工具。旧 Learning Closure 能力仅作为兼容模块保留。
 
 ## 核心原则
 
 - 本地优先：学习数据默认保存在本机。
 - 用户触发：只有用户点击 capture 按钮时才读取当前页面内容。
-- 最小权限：Chrome extension 只申请 v0.1 必需权限。
+- 最小权限：Chrome extension 只申请查词、本地 PDF 和本地服务所需权限。
 - API key 不进入前端。
 
 ## 本项目不会做什么
@@ -63,6 +63,7 @@ Captured content 会发送到本地 server。只有在 `USE_MOCK_LLM=false` 时�
 
 默认本地保存：
 
+- `legal-vocab.json` 中的词库、每日计划与复习状态
 - Markdown learning closure
 - `learning-log.json`
 - `classification-corrections.json`

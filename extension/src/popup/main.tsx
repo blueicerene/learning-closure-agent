@@ -241,7 +241,7 @@ function Popup() {
     <main className="shell">
       <header className="topbar">
         <div>
-          <h1>学习收尾助手</h1>
+          <h1>大王学习助手</h1>
           <p>{statusText}</p>
         </div>
         <span className={`status status-${status}`}>{formatStatus(status)}</span>

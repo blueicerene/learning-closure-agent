@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Repositioned the repository and extension around the V2 legal English dictionary, bounded daily review, Chrome lookup tools, and Da Wang macOS companion.
+- Kept the original learning-closure workflow as a compatibility module instead of the primary product identity.
+
 ## 2.0.0 - 2026-07-31
 
 ### Added

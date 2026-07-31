@@ -4,7 +4,7 @@
 
 A local-first legal English learning workspace for bilingual dictionary lookup from webpages, PDFs, and screenshots, automatic spaced review, and a learning-aware macOS companion named Da Wang.
 
-项目同时保留最初的学习收尾能力：捕获一次学习会话，生成总结、关键知识、未解决问题与下一步行动，并保存为本地 Markdown。所有词库、复习状态和学习记录默认留在本机。
+当前主产品是法律英语查词与复习系统。最初的“学习收尾”能力仅作为兼容模块保留，不再是项目的主定位。词库、复习状态和学习记录默认留在本机。
 
 ## V2 稳定基线
 
@@ -21,19 +21,20 @@ V2 的发布内容、验收事实和已知限制见 [docs/RELEASE_V2.md](docs/RE
 
 ## 项目解决的问题 / Problem
 
-- 学习内容分散在多个工具里。
-- 学习结束后不想手动复制、总结、分类、命名和打标签。
-- 下一次学习时容易忘记上一次停在哪里。
-- 需要一个轻量的 next action，让下一次学习能接上。
+- 在网页、PDF 和图片中遇到法律英语生词时，查词路径不应打断阅读。
+- 通用词典往往不能突出法律义、法律语境和中英对照。
+- 主动查过的词容易遗忘，需要自动进入可控的每日复习计划。
+- 积压词库不应一次变成当日任务，复习节奏需要有上限、可恢复、不羞辱用户。
+- 查词、词库、测试、日历、提醒和桌宠应共用同一条学习状态链路。
 
-In short: it helps turn the end of a study session into a saved note and a concrete next step.
+In short: it turns legal English encountered during real reading into a local vocabulary and a bounded daily spaced-review plan.
 
 ## 它不是什么 / What It Is Not
 
 本项目不是 NotebookLM、ChatGPT 或 Obsidian 的竞品。  
 It is not a competitor to NotebookLM, ChatGPT, or Obsidian.
 
-它是一个 workflow layer：连接已有学习工具，而不是替代它们。
+它是一个本地优先的法律英语学习层：连接已有阅读工具，而不是替代它们。
 
 It is a workflow layer on top of existing tools.
 
@@ -77,9 +78,9 @@ Local Server:
 - full ChatGPT / NotebookLM history import
 - automatic folder routing
 - note merging
-- full progress tracking
-- mastery scoring
-- quiz bank
+- cloud-hosted vocabulary service
+- unrestricted automatic processing of licensed exam materials
+- open-ended AI tutoring platform
 - Notion API
 - Anki API
 - Readwise API
@@ -118,7 +119,7 @@ npm --workspace extension run build
 2. Enable Developer mode.
 3. Click Load unpacked.
 4. Select `extension/dist`.
-5. Pin Learning Closure Agent.
+5. Pin `大王学习助手`.
 6. For local PDF files opened from your computer, open the extension details and enable `Allow access to file URLs`.
 
 ## Mock Mode 使用方法 / Mock Mode
@@ -365,4 +366,4 @@ V2 已于 2026-07-31 暂时结项，作为当前稳定基线：Learning Standard
 
 项目不扩展为自动处理受限制考试材料的 Bar / NCA planner。考试机构和学习材料许可可能限制将授权材料输入、上传或传输到生成式 AI 工具；任何进一步的考试规划功能都必须先完成来源许可和合规边界设计。
 
-当前产品定位：local-first legal English learning workspace and study-session closure layer for content the user is permitted to process.
+当前产品定位：本地优先的法律英语查词与间隔复习工作台，通过 Chrome 学习工具、图片 OCR 和 macOS 桌宠“大王”连接真实阅读与每日复习。

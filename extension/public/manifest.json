@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "大王学习助手",
   "version": "2.0.0",
-  "description": "查法律英语、完成每日复习，并整理学习收尾。",
+  "description": "查询法律英语，自动收词并完成每日间隔复习。",
   "permissions": ["activeTab", "contextMenus", "scripting", "storage"],
   "host_permissions": [
     "http://localhost:3333/*",
