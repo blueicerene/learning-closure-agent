@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "iteration": "pet-natural-motion-v3",
+  "core_goal": "用同一高还原大王母版制作侧卧待机与坐姿悬停的连续、自然、无换脸透明动画预览。",
+  "contract_owner": "PMO",
+  "status": "preview_user_accepted_pending_runtime_integration",
+  "in_scope": [
+    "single-master-reclining-motion",
+    "single-master-hover-motion",
+    "natural-motion-v3-preview-qa"
+  ],
+  "out_of_scope": [
+    "本预览合同内替换当前运行版桌宠",
+    "修改行走、拖图、查词、测试、词库、计划、日历或提醒",
+    "制作完整九状态宠物图集"
+  ],
+  "do_not_break": [
+    "当前运行版桌宠保持不变",
+    "大王银灰虎斑、脸型、眼型和黑色礼服保持同一身份",
+    "禁止不同猫图交叉溶解、光流换脸或头身分离",
+    "透明背景、小尺寸和接触点稳定"
+  ],
+  "decisions": [
+    {
+      "id": "single-master-reclining-motion",
+      "state": "confirmed",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "summary": "卧姿使用单一高保真母版连续形变，包含胸腹呼吸、头颈肩跟随、局部眨眼、独立耳动和尾根固定的慢速尾尖摆动。",
+      "evidence": [
+        "artifacts/release-gate/pet-natural-motion-v3/reclining-preview-v3.gif",
+        "artifacts/release-gate/pet-natural-motion-v3/reclining-preview-v3.apng",
+        "artifacts/release-gate/pet-natural-motion-v3/reclining-motion-qa-v3.json"
+      ],
+      "verification_commands": [
+        "scripts/verify-pet-natural-motion-v3-preview.sh"
+      ]
+    },
+    {
+      "id": "single-master-hover-motion",
+      "state": "confirmed",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "summary": "悬停使用单一高保真母版连续形变，视线方向带动头、颈、肩和胸腔，前爪承重点稳定，并加入不规则眨眼、耳动与松弛盘尾微动。",
+      "evidence": [
+        "artifacts/release-gate/pet-natural-motion-v3/hover-preview-v3.gif",
+        "artifacts/release-gate/pet-natural-motion-v3/hover-preview-v3.apng",
+        "artifacts/release-gate/pet-natural-motion-v3/hover-motion-qa-v3.json"
+      ],
+      "verification_commands": [
+        "scripts/verify-pet-natural-motion-v3-preview.sh"
+      ]
+    },
+    {
+      "id": "natural-motion-v3-preview-qa",
+      "state": "confirmed",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "summary": "桌面与390px真实浏览器播放、透明边缘、小尺寸、局部运动、零换脸、零双影、精确循环接缝和控制台错误检查均通过Codex自审。",
+      "evidence": [
+        "artifacts/release-gate/pet-natural-motion-v3/preview.html",
+        "artifacts/release-gate/pet-natural-motion-v3/preview-contact-sheet-v3.png",
+        "artifacts/release-gate/pet-natural-motion-v3/preview-qa-v3.json",
+        "artifacts/release-gate/pet-natural-motion-v3/browser-playback-qa-v3.json",
+        "artifacts/release-gate/pet-natural-motion-v3/browser-playback-desktop-t1.png",
+        "artifacts/release-gate/pet-natural-motion-v3/browser-playback-desktop-t2.png",
+        "artifacts/release-gate/pet-natural-motion-v3/browser-playback-narrow-t1.png",
+        "artifacts/release-gate/pet-natural-motion-v3/browser-playback-narrow-t2.png"
+      ],
+      "verification_commands": [
+        "scripts/verify-pet-natural-motion-v3-preview.sh"
+      ]
+    }
+  ],
+  "real_path_checks": [
+    {
+      "id": "natural-motion-v3-browser-preview",
+      "path": "独立透明预览与180px小尺寸预览",
+      "status": "passed_by_codex_and_user",
+      "verification_commands": [
+        "scripts/verify-pet-natural-motion-v3-preview.sh"
+      ],
+      "required_evidence": [
+        "artifacts/release-gate/pet-natural-motion-v3/browser-playback-qa-v3.json",
+        "artifacts/release-gate/pet-natural-motion-v3/browser-playback-desktop-t1.png",
+        "artifacts/release-gate/pet-natural-motion-v3/browser-playback-desktop-t2.png",
+        "artifacts/release-gate/pet-natural-motion-v3/browser-playback-narrow-t1.png",
+        "artifacts/release-gate/pet-natural-motion-v3/browser-playback-narrow-t2.png"
+      ]
+    }
+  ]
+}

@@ -1,12 +1,12 @@
 # 安全说明 / Security
 
-Learning Closure Agent v0.1 是本地优先、用户触发式的学习收尾工具。
+“大王陪你背单词” V2 是本地优先、用户触发式的法律英语查词与间隔复习工具。旧 Learning Closure 能力仅作为兼容模块保留。
 
 ## 核心原则
 
 - 本地优先：学习数据默认保存在本机。
 - 用户触发：只有用户点击 capture 按钮时才读取当前页面内容。
-- 最小权限：Chrome extension 只申请 v0.1 必需权限。
+- 最小权限：Chrome extension 只申请查词、本地 PDF 和本地服务所需权限。
 - API key 不进入前端。
 
 ## 本项目不会做什么
@@ -19,6 +19,14 @@ Learning Closure Agent v0.1 是本地优先、用户触发式的学习收尾工�
 - 不读取用户文件系统中的任意文件。
 - 不读取密码字段。
 - 不上传内容到未配置的第三方服务。
+
+## 许可材料与考试资料限制
+
+本项目不绕过任何考试机构、课程提供方或资料版权方的规则。用户必须先确认相关材料是否允许被 AI 工具处理。
+
+对于 LSO licensing materials 或类似受许可限制的考试材料，不得将材料正文输入、上传、粘贴、截图、总结、翻译、释义或以其他方式传输到生成式 AI 工具，包括本项目的 real LLM mode。
+
+本项目适合处理用户有权处理的内容，例如用户原创笔记、公开法规、公开案例、公开网页、自写学习反思和非受限学习元数据。若来源条款不明确，应默认不要使用 real LLM mode 处理该内容。
 
 ## Capture 行为
 
@@ -55,6 +63,7 @@ Captured content 会发送到本地 server。只有在 `USE_MOCK_LLM=false` 时�
 
 默认本地保存：
 
+- `legal-vocab.json` 中的词库、每日计划与复习状态
 - Markdown learning closure
 - `learning-log.json`
 - `classification-corrections.json`
@@ -72,8 +81,19 @@ Captured content 会发送到本地 server。只有在 `USE_MOCK_LLM=false` 时�
 当前 host permissions：
 
 - `http://localhost:3333/*`
+- `http://localhost:5174/*`
+- `http://127.0.0.1:5174/*`
+- `file:///*`（仅用于用户手动打开的本地 PDF / study files；Chrome 仍需用户在 extension details 中启用 file URL access）
 - `https://chatgpt.com/*`
 - `https://notebooklm.google.com/*`
+- `https://eclass.yorku.ca/*`
+- `https://www.canlii.org/*`
+- `https://canlii.org/*`
+- `https://laws-lois.justice.gc.ca/*`
+- `https://www.justice.gc.ca/*`
+- `https://www.scc-csc.ca/*`
+- `https://decisions.scc-csc.ca/*`
+- `https://www.ontario.ca/laws/*`
 - `https://www.youtube.com/*`
 
 没有申请：

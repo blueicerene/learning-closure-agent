@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "iteration": "pet-hover-natural-v1",
+  "core_goal": "让鼠标持续悬停时，大王保持坐姿并在同一个连续循环中不规则转头、回正、停顿和眨眼。",
+  "contract_owner": "PMO",
+  "status": "ready",
+  "in_scope": [
+    "pet-hover-natural-motion",
+    "pet-hover-continuous-head-motion",
+    "pet-hover-regression"
+  ],
+  "out_of_scope": [
+    "修改已验收的侧卧待机、左右拖动行走或学习状态动画",
+    "修改查词、测试、词库、日历或提醒逻辑",
+    "更换大王身份、银灰虎斑、体型或黑色礼服",
+    "改变鼠标拖动窗口与图片拖放的触发方式"
+  ],
+  "do_not_break": [
+    "鼠标离开后恢复已验收的放大侧卧待机",
+    "向左和向右拖动仍显示已验收的方向行走",
+    "图片拖入仍进入现有 OCR 与查词流程",
+    "桌宠窗口保持透明、始终可见且可手动拖动",
+    "中文气泡和学习状态逻辑保持可用"
+  ],
+  "decisions": [
+    {
+      "id": "pet-hover-natural-motion",
+      "summary": "悬停坐姿加入克制呼吸、自然眨眼和轻微耳朵反应，避免静态照片和机械同步循环。",
+      "state": "confirmed",
+      "priority": "core",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "required_evidence": [
+        "artifacts/release-gate/pet-hover-natural/hover-natural-preview.gif",
+        "artifacts/release-gate/pet-hover-natural/hover-natural-contact-sheet.png",
+        "artifacts/release-gate/pet-hover-natural/motion-qa.json"
+      ],
+      "evidence": [
+        "artifacts/release-gate/pet-hover-natural/hover-natural-preview.gif",
+        "artifacts/release-gate/pet-hover-natural/hover-natural-contact-sheet.png",
+        "artifacts/release-gate/pet-hover-natural/motion-qa.json"
+      ],
+      "verification_commands": [
+        "scripts/verify-pet-hover-natural.sh"
+      ]
+    },
+    {
+      "id": "pet-hover-continuous-head-motion",
+      "summary": "一次持续悬停过程中，头部应在同一动画内不规则地左转、右转、回正并短暂停顿；不得在进入悬停时只选一套固定方向循环。",
+      "state": "confirmed",
+      "priority": "core",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "required_evidence": [
+        "artifacts/release-gate/pet-hover-natural/continuous-head-motion.json"
+      ],
+      "evidence": [
+        "artifacts/release-gate/pet-hover-natural/continuous-head-motion.json"
+      ],
+      "verification_commands": [
+        "scripts/verify-pet-hover-natural.sh"
+      ]
+    },
+    {
+      "id": "pet-hover-regression",
+      "summary": "悬停优化不得破坏侧卧待机、左右拖动行走、透明窗口、图片拖放识词与中文气泡。",
+      "state": "confirmed",
+      "priority": "core",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "required_evidence": [
+        "artifacts/release-gate/pet-hover-natural/regression.json"
+      ],
+      "evidence": [
+        "artifacts/release-gate/pet-hover-natural/regression.json"
+      ],
+      "verification_commands": [
+        "scripts/verify-pet-hover-natural.sh"
+      ]
+    }
+  ],
+  "real_path_checks": [
+    {
+      "id": "pet-hover-continuous-preview-check",
+      "status": "passed",
+      "verification_commands": [
+        "scripts/verify-pet-hover-natural.sh"
+      ],
+      "required_evidence": [
+        "artifacts/release-gate/pet-hover-natural/hover-natural-preview.gif",
+        "artifacts/release-gate/pet-hover-natural/hover-natural-contact-sheet.png",
+        "artifacts/release-gate/pet-hover-natural/motion-qa.json",
+        "artifacts/release-gate/pet-hover-natural/continuous-head-motion.json"
+      ],
+      "evidence": [
+        "artifacts/release-gate/pet-hover-natural/hover-natural-preview.gif",
+        "artifacts/release-gate/pet-hover-natural/hover-natural-contact-sheet.png",
+        "artifacts/release-gate/pet-hover-natural/motion-qa.json",
+        "artifacts/release-gate/pet-hover-natural/continuous-head-motion.json"
+      ]
+    },
+    {
+      "id": "pet-hover-continuous-runtime-check",
+      "status": "passed",
+      "verification_commands": [
+        "scripts/verify-pet-hover-natural.sh"
+      ],
+      "required_evidence": [
+        "artifacts/release-gate/pet-hover-natural/runtime-hover-dynamic.png",
+        "artifacts/release-gate/pet-hover-natural/regression.json"
+      ],
+      "evidence": [
+        "artifacts/release-gate/pet-hover-natural/runtime-hover-dynamic.png",
+        "artifacts/release-gate/pet-hover-natural/regression.json"
+      ]
+    }
+  ]
+}

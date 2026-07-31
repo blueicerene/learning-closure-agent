@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "iteration": "v2-positioning-sync",
+  "core_goal": "让 GitHub 默认展示、项目文档和扩展公开文案一致反映法律英语复习小程序 V2，而不是最初的一键学习收尾原型。",
+  "contract_owner": "PMO",
+  "status": "ready",
+  "in_scope": ["v2-public-positioning"],
+  "out_of_scope": [
+    "重命名 GitHub 仓库或 npm package",
+    "删除旧 Learning Closure 兼容模块",
+    "修改词库、复习计划或用户学习数据",
+    "新增产品功能"
+  ],
+  "do_not_break": [
+    "旧 Learning Closure 能力继续作为兼容模块存在",
+    "V2 代码与历史通过普通 Git 合并进入 main，不重写历史",
+    "GitHub About 中关于大王的纪念文字不被删除",
+    "扩展仍可完成 TypeScript 检查和生产构建"
+  ],
+  "decisions": [
+    {
+      "id": "v2-public-positioning",
+      "summary": "README、About、Project Charter、Security 与扩展公开文案统一使用 V2 法律英语查词与间隔复习定位。",
+      "state": "confirmed",
+      "priority": "core",
+      "implemented": false,
+      "verified_on_real_path": false,
+      "verification_commands": ["node scripts/verify-v2-positioning-sync.mjs"],
+      "required_evidence": [
+        "artifacts/release-gate/v2-positioning-sync/verification.json",
+        "artifacts/release-gate/v2-positioning-sync/github-about.json"
+      ],
+      "evidence": []
+    }
+  ],
+  "real_path_checks": []
+}

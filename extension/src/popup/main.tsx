@@ -14,6 +14,16 @@ import "./styles.css";
 
 type Status = "idle" | "capturing" | "closing" | "ready" | "saving" | "saved" | "error";
 
+type LearningStatus = {
+  todayAdded: number;
+  dueToday: number;
+  learningStreakDays: number;
+  dailyTestStreakDays: number;
+  masteryRate: number;
+  total: number;
+  repeatedWrong: number;
+};
+
 const apiBaseUrl = "http://localhost:3333";
 
 function Popup() {
@@ -28,21 +38,23 @@ function Popup() {
   const [lastAction, setLastAction] = useState<LastActionResponse | null>(null);
   const [error, setError] = useState("");
   const [savedPath, setSavedPath] = useState("");
+  const [learningStatus, setLearningStatus] = useState<LearningStatus | null>(null);
 
   useEffect(() => {
     loadLastAction();
+    loadLearningStatus();
   }, []);
 
   const subjectOptions = subjects[primaryGoalTrack];
 
   const statusText = useMemo(() => {
-    if (status === "idle") return session ? "Session captured" : "Ready";
-    if (status === "capturing") return "Capturing session";
-    if (status === "closing") return "Generating closure";
-    if (status === "ready") return "Closure ready";
-    if (status === "saving") return "Saving Markdown";
-    if (status === "saved") return "Saved";
-    return "Needs attention";
+    if (status === "idle") return session ? "已获取学习内容" : "准备好了";
+    if (status === "capturing") return "正在获取学习内容";
+    if (status === "closing") return "正在整理学习收尾";
+    if (status === "ready") return "学习收尾已生成";
+    if (status === "saving") return "正在保存笔记";
+    if (status === "saved") return "已保存";
+    return "需要处理";
   }, [session, status]);
 
   function updatePrimaryGoalTrack(nextTrack: GoalTrack) {
@@ -60,6 +72,22 @@ function Popup() {
       }
     } catch {
       setLastAction(null);
+    }
+  }
+
+  async function loadLearningStatus() {
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/vocab/learning-status`, { cache: "no-store" });
+      setLearningStatus(response.ok ? await response.json() : null);
+    } catch {
+      setLearningStatus(null);
+    }
+  }
+
+  async function openTodayReview() {
+    const response = await chrome.runtime.sendMessage({ type: "VOCAB_OPEN_TODAY_REVIEW" }) as { ok?: boolean; error?: string };
+    if (!response?.ok) {
+      showError(new Error(response?.error || "请先从桌面打开“大王查词”，然后重试。"));
     }
   }
 
@@ -93,7 +121,7 @@ function Popup() {
   function captureManualText() {
     const text = manualText.trim();
     if (!text) {
-      setError("Paste some learning text first.");
+      setError("请先粘贴学习内容。");
       setStatus("error");
       return;
     }
@@ -117,7 +145,7 @@ function Popup() {
 
   async function createClosure() {
     if (!session) {
-      setError("Capture or paste a learning session first.");
+      setError("请先获取网页内容或粘贴学习材料。");
       setStatus("error");
       return;
     }
@@ -135,7 +163,7 @@ function Popup() {
 
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data?.error || "Closure failed");
+        throw new Error(data?.error || "生成学习收尾失败。");
       }
 
       setSession(requestSession);
@@ -149,7 +177,7 @@ function Popup() {
 
   async function saveClosure() {
     if (!session || !closure) {
-      setError("Generate a closure before saving.");
+      setError("请先生成学习收尾，再保存。");
       setStatus("error");
       return;
     }
@@ -171,7 +199,7 @@ function Popup() {
 
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data?.error || "Save failed");
+        throw new Error(data?.error || "保存失败。");
       }
 
       setSavedPath(data.markdownPath ?? "");
@@ -205,7 +233,7 @@ function Popup() {
   }
 
   function showError(err: unknown) {
-    setError(err instanceof Error ? err.message : "Something went wrong");
+    setError(err instanceof Error ? err.message : "操作失败，请稍后重试。");
     setStatus("error");
   }
 
@@ -213,16 +241,36 @@ function Popup() {
     <main className="shell">
       <header className="topbar">
         <div>
-          <h1>Learning Closure</h1>
+          <h1>大王学习助手</h1>
           <p>{statusText}</p>
         </div>
-        <span className={`status status-${status}`}>{status}</span>
+        <span className={`status status-${status}`}>{formatStatus(status)}</span>
       </header>
+
+      <section className="vocab-summary">
+        <div>
+          <strong>{learningStatus?.dueToday ?? "–"}</strong>
+          <span>待复习</span>
+        </div>
+        <div>
+          <strong>{learningStatus?.todayAdded ?? "–"}</strong>
+          <span>今日新增</span>
+        </div>
+        <div>
+          <strong>{learningStatus?.repeatedWrong ?? "–"}</strong>
+          <span>重点复习</span>
+        </div>
+        <div>
+          <strong>{learningStatus ? `${learningStatus.dailyTestStreakDays ?? 0}天` : "–"}</strong>
+          <span>连续完成</span>
+        </div>
+        <button onClick={() => void openTodayReview()}>继续完成今日任务</button>
+      </section>
 
       {lastAction?.hasLastAction && (
         <section className="last-action">
-          <div className="label">Continue from last session?</div>
-          <h2>{lastAction.lastTitle || "Previous session"}</h2>
+          <div className="label">继续上次学习</div>
+          <h2>{lastAction.lastTitle || "上次学习内容"}</h2>
           {lastAction.nextActions.map((item) => (
             <p key={item.action}><strong>{item.action}</strong> {item.reason}</p>
           ))}
@@ -230,7 +278,7 @@ function Popup() {
       )}
 
       <section className="field">
-        <label htmlFor="primaryGoalTrack">Primary Goal Track</label>
+        <label htmlFor="primaryGoalTrack">主要目标</label>
         <select
           id="primaryGoalTrack"
           value={primaryGoalTrack}
@@ -239,12 +287,12 @@ function Popup() {
           {goalTracks.map((track) => <option key={track} value={track}>{track}</option>)}
         </select>
 
-        <label htmlFor="subject">Subject</label>
+        <label htmlFor="subject">学习主题</label>
         <select id="subject" value={subject} onChange={(event) => setSubject(event.target.value)}>
           {subjectOptions.map((item) => <option key={item} value={item}>{item}</option>)}
         </select>
 
-        <label htmlFor="goal">Learning goal</label>
+        <label htmlFor="goal">本次学习目标</label>
         <input
           id="goal"
           value={goal}
@@ -254,35 +302,35 @@ function Popup() {
       </section>
 
       <section className="source">
-        <div className="label">Captured Session</div>
-        <h2>{session?.title || "No session captured yet"}</h2>
-        <p>{session?.url || session?.sourceType || "Capture the active tab, selected text, or paste manually."}</p>
-        {session && <p>{session.rawText.length.toLocaleString()} characters captured</p>}
+        <div className="label">本次学习内容</div>
+        <h2>{session?.title || "尚未获取学习内容"}</h2>
+        <p>{session?.url || session?.sourceType || "可获取当前网页、选中文字，或手动粘贴内容。"}</p>
+        {session && <p>已获取 {session.rawText.length.toLocaleString()} 个字符</p>}
       </section>
 
       <div className="actions">
-        <button onClick={() => capture("page")} disabled={isBusy(status)}>Capture Current Page</button>
-        <button onClick={() => capture("selection")} disabled={isBusy(status)}>Capture Selected Text</button>
+        <button onClick={() => capture("page")} disabled={isBusy(status)}>获取当前网页</button>
+        <button onClick={() => capture("selection")} disabled={isBusy(status)}>获取选中文字</button>
       </div>
 
       <section className="field">
-        <label htmlFor="manualText">Manual paste</label>
+        <label htmlFor="manualText">手动粘贴</label>
         <textarea
           id="manualText"
           value={manualText}
           onChange={(event) => setManualText(event.target.value)}
-          placeholder="Paste transcript, notes, or copied study text here."
+          placeholder="在这里粘贴课程文字、笔记或其他学习内容。"
         />
-        <button onClick={captureManualText} disabled={isBusy(status)}>Use Pasted Text</button>
+        <button onClick={captureManualText} disabled={isBusy(status)}>使用粘贴内容</button>
       </section>
 
       <div className="actions">
-        <button onClick={createClosure} disabled={!session || isBusy(status)}>Generate Closure</button>
-        <button onClick={saveClosure} disabled={!closure || isBusy(status)}>Save</button>
+        <button onClick={createClosure} disabled={!session || isBusy(status)}>生成学习收尾</button>
+        <button onClick={saveClosure} disabled={!closure || isBusy(status)}>保存笔记</button>
       </div>
 
       {error && <div className="notice error">{error}</div>}
-      {savedPath && <div className="notice success">Saved to {savedPath}</div>}
+      {savedPath && <div className="notice success">已保存至 {savedPath}</div>}
 
       <ClosurePreview closure={closure} onClassificationChange={updateClassification} />
     </main>
@@ -297,7 +345,7 @@ function ClosurePreview({
   onClassificationChange: (classification: Classification) => void;
 }) {
   if (!closure) {
-    return <p className="empty">Learning closure preview will appear here.</p>;
+    return <p className="empty">学习收尾内容会显示在这里。</p>;
   }
 
   return (
@@ -305,14 +353,14 @@ function ClosurePreview({
       <ClassificationPanel classification={closure.classification} onChange={onClassificationChange} />
 
       <article className="panel">
-        <h2>Session Summary</h2>
+        <h2>学习摘要</h2>
         <p>{closure.summary}</p>
       </article>
 
-      <ListPanel title="Key Takeaways" items={closure.keyTakeaways} />
+      <ListPanel title="核心收获" items={closure.keyTakeaways} />
 
       <section className="cards">
-        <h2>Knowledge Cards</h2>
+        <h2>知识卡片</h2>
         {closure.knowledgeCards.map((card) => (
           <article className="card" key={card.title}>
             <h3>{card.title}</h3>
@@ -322,10 +370,10 @@ function ClosurePreview({
         ))}
       </section>
 
-      <ListPanel title="Unresolved Questions" items={closure.unresolvedQuestions} />
+      <ListPanel title="待解决问题" items={closure.unresolvedQuestions} />
 
       <section className="panel">
-        <h2>Next Actions</h2>
+        <h2>下一步行动</h2>
         {closure.nextActions.map((item) => (
           <p key={item.action}><strong>{item.action}</strong> {item.reason}</p>
         ))}
@@ -357,30 +405,30 @@ function ClassificationPanel({
 
   return (
     <section className="panel classification">
-      <h2>Classification</h2>
+      <h2>内容分类</h2>
       {classification.classificationConfidence < 0.6 && (
-        <div className="notice error">Agent 不确定这条内容应该归到哪里，请确认分类后再保存。</div>
+        <div className="notice error">暂时无法确定这条内容的分类，请确认后再保存。</div>
       )}
       {classification.classificationConfidence >= 0.6 && classification.classificationConfidence < 0.8 && (
         <div className="notice warning">建议检查分类。</div>
       )}
 
-      <ReadonlyRow label="Primary" value={classification.primaryGoalTrack} />
-      <ReadonlyRow label="Subject" value={classification.subject} />
+      <ReadonlyRow label="主要目标" value={classification.primaryGoalTrack} />
+      <ReadonlyRow label="学习主题" value={classification.subject} />
 
-      <label>Topic</label>
+      <label>主题</label>
       <input value={classification.topic} onChange={(event) => patch({ topic: event.target.value })} />
 
-      <label>Subtopics</label>
+      <label>子主题</label>
       <input value={classification.subtopics.join(", ")} onChange={(event) => patch({ subtopics: splitList(event.target.value) })} />
 
-      <label>Secondary</label>
+      <label>次要目标</label>
       <input value={classification.secondaryGoalTracks.join(", ")} onChange={(event) => patch({ secondaryGoalTracks: splitGoalTracks(event.target.value) })} />
 
-      <label>Related Subjects</label>
+      <label>相关主题</label>
       <input value={classification.relatedSubjects.join(", ")} onChange={(event) => patch({ relatedSubjects: splitList(event.target.value) })} />
 
-      <label>Knowledge Types</label>
+      <label>知识类型</label>
       <select
         multiple
         value={classification.knowledgeTypes}
@@ -389,12 +437,12 @@ function ClassificationPanel({
         {knowledgeTypes.map((type) => <option key={type} value={type}>{type}</option>)}
       </select>
 
-      <label>Jurisdiction</label>
+      <label>法域</label>
       <input value={classification.jurisdiction || ""} onChange={(event) => patch({ jurisdiction: event.target.value })} />
 
-      <ReadonlyRow label="Confidence" value={`${Math.round(classification.classificationConfidence * 100)}%`} className={confidenceClass} />
-      <ReadonlyRow label="Reason" value={classification.classificationReason} />
-      <ReadonlyRow label="Review Status" value={classification.reviewStatus} />
+      <ReadonlyRow label="分类置信度" value={`${Math.round(classification.classificationConfidence * 100)}%`} className={confidenceClass} />
+      <ReadonlyRow label="分类理由" value={classification.classificationReason} />
+      <ReadonlyRow label="确认状态" value={classification.reviewStatus} />
     </section>
   );
 }
@@ -403,7 +451,7 @@ function ReadonlyRow({ label, value, className }: { label: string; value: string
   return (
     <div className="classification-row">
       <span>{label}</span>
-      <strong className={className}>{value || "None"}</strong>
+      <strong className={className}>{value || "无"}</strong>
     </div>
   );
 }
@@ -412,7 +460,7 @@ function ListPanel({ title, items }: { title: string; items: string[] }) {
   return (
     <section className="panel">
       <h2>{title}</h2>
-      {items.length ? <ol>{items.map((item) => <li key={item}>{item}</li>)}</ol> : <p>None captured.</p>}
+      {items.length ? <ol>{items.map((item) => <li key={item}>{item}</li>)}</ol> : <p>暂无内容。</p>}
     </section>
   );
 }
@@ -427,6 +475,18 @@ function splitGoalTracks(value: string): GoalTrack[] {
 
 function isBusy(status: Status): boolean {
   return status === "capturing" || status === "closing" || status === "saving";
+}
+
+function formatStatus(status: Status): string {
+  return {
+    idle: "就绪",
+    capturing: "获取中",
+    closing: "整理中",
+    ready: "待确认",
+    saving: "保存中",
+    saved: "已保存",
+    error: "需处理"
+  }[status];
 }
 
 createRoot(document.getElementById("root")!).render(

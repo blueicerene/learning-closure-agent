@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "iteration": "quiz-feedback-v1",
+  "core_goal": "无论答对或答错，结果页都可靠呈现发音、法律语境和例句；缺失内容明确降级，不伪造泛化例句。",
+  "contract_owner": "PMO",
+  "status": "ready",
+  "in_scope": [
+    "review-payload-feedback-fields",
+    "correct-and-wrong-result-details",
+    "missing-content-explicit-fallback",
+    "safe-real-content-enrichment"
+  ],
+  "decisions": [
+    {
+      "id": "review-payload-feedback-fields",
+      "summary": "复习题读取契约返回 phonetic、legalContext 和 examples，不改变答题判分。",
+      "priority": "core",
+      "state": "confirmed",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "evidence": [
+        "artifacts/release-gate/quiz-feedback/checkpoint-api-result.json"
+      ],
+      "required_evidence": [
+        "artifacts/release-gate/quiz-feedback/checkpoint-api-result.json"
+      ],
+      "verification_commands": [
+        "/Users/rene/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node --import tsx server/src/tests/vocabFixture.ts"
+      ]
+    },
+    {
+      "id": "correct-and-wrong-result-details",
+      "summary": "答对和答错结果都显示手动发音、法律语境、例句和明确下一题。",
+      "priority": "core",
+      "state": "confirmed",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "evidence": [
+        "artifacts/release-gate/quiz-feedback/checkpoint-api-result.json",
+        "artifacts/release-gate/quiz-feedback/correct-result-real-ui.png",
+        "artifacts/release-gate/quiz-feedback/wrong-result-real-ui.png",
+        "artifacts/release-gate/quiz-feedback/wrong-result-narrow-400.png"
+      ],
+      "required_evidence": [
+        "artifacts/release-gate/quiz-feedback/correct-result-real-ui.png",
+        "artifacts/release-gate/quiz-feedback/wrong-result-real-ui.png"
+      ],
+      "verification_commands": [
+        "/Users/rene/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node --import tsx web/src/tests/quizResultFixture.ts",
+        "cd web && /Users/rene/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node ../node_modules/typescript/bin/tsc -p tsconfig.json --noEmit && /Users/rene/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node ../node_modules/vite/bin/vite.js build"
+      ]
+    },
+    {
+      "id": "missing-content-explicit-fallback",
+      "summary": "字段缺失时显示“暂无法律语境”和“暂无例句”，不生成泛化占位内容。",
+      "priority": "core",
+      "state": "confirmed",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "evidence": [
+        "artifacts/release-gate/quiz-feedback/checkpoint-api-result.json",
+        "artifacts/release-gate/quiz-feedback/missing-result-real-ui.png"
+      ],
+      "required_evidence": [
+        "artifacts/release-gate/quiz-feedback/missing-result-real-ui.png"
+      ],
+      "verification_commands": [
+        "/Users/rene/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node --import tsx web/src/tests/quizResultFixture.ts"
+      ]
+    },
+    {
+      "id": "safe-real-content-enrichment",
+      "summary": "使用现有 AI legal lookup 分批补齐全词库缺失的音标、法律语境和中英例句；未来新词异步补全，质量失败保持明确待补状态。",
+      "priority": "core",
+      "state": "confirmed",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "evidence": [
+        "artifacts/release-gate/quiz-feedback/isolated-ai-enrichment.json",
+        "artifacts/release-gate/quiz-feedback/real-library-enrichment.json"
+      ],
+      "required_evidence": [
+        "artifacts/release-gate/quiz-feedback/isolated-ai-enrichment.json",
+        "artifacts/release-gate/quiz-feedback/real-library-enrichment.json"
+      ],
+      "verification_commands": [
+        "/Users/rene/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node --import tsx server/src/tests/vocabFixture.ts",
+        "cd server && /Users/rene/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node --import tsx src/tests/feedbackEnrichmentCheckpoint.ts"
+      ]
+    }
+  ],
+  "real_path_checks": [
+    {
+      "id": "real-plan-feedback-read",
+      "summary": "真实冻结计划的复习读取返回可用反馈字段，且不提交答案、不改变计划和历史。",
+      "status": "passed",
+      "evidence": [
+        "artifacts/release-gate/quiz-feedback/real-library-enrichment.json",
+        "artifacts/release-gate/quiz-feedback/correct-result-real-ui.png",
+        "artifacts/release-gate/quiz-feedback/wrong-result-real-ui.png"
+      ],
+      "required_evidence": [
+        "artifacts/release-gate/quiz-feedback/real-library-enrichment.json"
+      ],
+      "verification_commands": [
+        "/Users/rene/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node -e 'fetch(\"http://127.0.0.1:3333/api/vocab/quality/feedback-audit\").then(r=>r.json()).then(a=>{if(a.total<198||a.complete!==a.total-a.missingAny||a.missingAny>4)process.exit(1);console.log(JSON.stringify(a))})'"
+      ]
+    }
+  ]
+}

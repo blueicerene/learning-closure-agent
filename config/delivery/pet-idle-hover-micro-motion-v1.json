@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "iteration": "pet-idle-hover-micro-motion-v1",
+  "core_goal": "在不改变卧姿待机和坐姿悬停构图的前提下，为两种常态增加自然、克制且不同步的耳朵与尾巴微动作，并确保悬停转动由头颈肩连续区域共同完成。",
+  "contract_owner": "PMO",
+  "status": "ready",
+  "in_scope": [
+    "pet-idle-ear-tail-motion",
+    "pet-hover-ear-tail-motion",
+    "pet-micro-motion-regression"
+  ],
+  "out_of_scope": [
+    "改变待机卧姿或悬停坐姿",
+    "修改拖动行走、拖图处理或学习状态动作",
+    "修改查词、测试、词库、计划、日历或提醒逻辑",
+    "更换大王身份、毛色、体型或黑色礼服"
+  ],
+  "do_not_break": [
+    "鼠标离开后仍恢复卧姿待机",
+    "持续悬停仍播放不规则转头循环",
+    "左右拖动仍切换方向行走",
+    "图片拖入仍进入现有 OCR 与查词流程",
+    "透明窗口、手动拖动和中文气泡保持可用"
+  ],
+  "decisions": [
+    {
+      "id": "pet-idle-ear-tail-motion",
+      "summary": "卧姿待机增加左右耳不同步微动；尾根稳定、尾尖每循环仅缓慢往返一次并在两端短暂停顿。",
+      "state": "confirmed",
+      "priority": "core",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "required_evidence": [
+        "artifacts/release-gate/pet-idle-hover-micro-motion/idle-preview.gif",
+        "artifacts/release-gate/pet-idle-hover-micro-motion/idle-motion-qa.json"
+      ],
+      "evidence": [
+        "artifacts/release-gate/pet-idle-hover-micro-motion/idle-preview.gif",
+        "artifacts/release-gate/pet-idle-hover-micro-motion/idle-motion-qa.json"
+      ],
+      "verification_commands": [
+        "scripts/verify-pet-idle-hover-micro-motion.sh"
+      ]
+    },
+    {
+      "id": "pet-hover-ear-tail-motion",
+      "summary": "坐姿悬停由头、颈、肩和上胸连续区域共同轻转；耳朵独立微动，盘尾固定尾根、尾尖缓慢松弛摆动，禁止头身分层铰接。",
+      "state": "confirmed",
+      "priority": "core",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "required_evidence": [
+        "artifacts/release-gate/pet-idle-hover-micro-motion/hover-preview.gif",
+        "artifacts/release-gate/pet-idle-hover-micro-motion/hover-motion-qa.json"
+      ],
+      "evidence": [
+        "artifacts/release-gate/pet-idle-hover-micro-motion/hover-preview.gif",
+        "artifacts/release-gate/pet-idle-hover-micro-motion/hover-motion-qa.json"
+      ],
+      "verification_commands": [
+        "scripts/verify-pet-idle-hover-micro-motion.sh"
+      ]
+    },
+    {
+      "id": "pet-micro-motion-regression",
+      "summary": "耳尾细节不得破坏透明窗口、悬停转头、左右行走、图片拖放和中文气泡。",
+      "state": "confirmed",
+      "priority": "core",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "required_evidence": [
+        "artifacts/release-gate/pet-idle-hover-micro-motion/regression.json"
+      ],
+      "evidence": [
+        "artifacts/release-gate/pet-idle-hover-micro-motion/regression.json"
+      ],
+      "verification_commands": [
+        "scripts/verify-pet-idle-hover-micro-motion.sh"
+      ]
+    }
+  ],
+  "real_path_checks": [
+    {
+      "id": "pet-idle-hover-micro-motion-preview-check",
+      "status": "passed",
+      "verification_commands": [
+        "scripts/verify-pet-idle-hover-micro-motion.sh"
+      ],
+      "required_evidence": [
+        "artifacts/release-gate/pet-idle-hover-micro-motion/idle-preview.gif",
+        "artifacts/release-gate/pet-idle-hover-micro-motion/hover-preview.gif",
+        "artifacts/release-gate/pet-idle-hover-micro-motion/regression.json"
+      ],
+      "evidence": [
+        "artifacts/release-gate/pet-idle-hover-micro-motion/idle-preview.gif",
+        "artifacts/release-gate/pet-idle-hover-micro-motion/hover-preview.gif",
+        "artifacts/release-gate/pet-idle-hover-micro-motion/regression.json"
+      ]
+    },
+    {
+      "id": "pet-idle-hover-micro-motion-runtime-visual-check",
+      "status": "passed",
+      "verification_commands": [
+        "scripts/verify-pet-idle-hover-micro-motion.sh"
+      ],
+      "required_evidence": [
+        "artifacts/release-gate/pet-idle-hover-micro-motion/runtime-idle.png",
+        "artifacts/release-gate/pet-idle-hover-micro-motion/runtime-hover.png",
+        "artifacts/release-gate/pet-idle-hover-micro-motion/runtime-visual-qa.json"
+      ],
+      "evidence": [
+        "artifacts/release-gate/pet-idle-hover-micro-motion/runtime-idle.png",
+        "artifacts/release-gate/pet-idle-hover-micro-motion/runtime-hover.png",
+        "artifacts/release-gate/pet-idle-hover-micro-motion/runtime-visual-qa.json"
+      ]
+    }
+  ]
+}

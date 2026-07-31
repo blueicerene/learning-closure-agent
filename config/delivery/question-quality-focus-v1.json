@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "iteration": "question-quality-focus-v1",
+  "core_goal": "修复题目词义错配，并让重点复习只由同场强化再次答错触发。",
+  "contract_owner": "PMO",
+  "status": "ready",
+  "in_scope": [
+    "question-quality-exemption",
+    "fallback-definition-audit",
+    "focus-state-machine",
+    "focus-only-entry"
+  ],
+  "decisions": [
+    {
+      "id": "question-quality-exemption",
+      "summary": "错误题暂停出题；仅在有精确答题前状态快照时撤销最近一次错误，不猜测改写历史。",
+      "state": "confirmed",
+      "priority": "core",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "required_evidence": [
+        "artifacts/release-gate/question-quality-focus/real-migration.json",
+        "artifacts/release-gate/question-quality-focus/question-issue-wrong-result-400px.png"
+      ],
+      "evidence": [
+        "artifacts/release-gate/question-quality-focus/isolated-checkpoint.json",
+        "artifacts/release-gate/question-quality-focus/real-migration.json",
+        "artifacts/release-gate/question-quality-focus/visual-qa.json",
+        "artifacts/release-gate/question-quality-focus/question-issue-wrong-result-400px.png"
+      ],
+      "verification_commands": [
+        "node --import tsx server/src/tests/questionQualityFocusCheckpoint.ts",
+        "node --import tsx server/src/tests/questionQualityFocusHttp.ts",
+        "node scripts/verify-question-quality-focus-runtime.mjs"
+      ]
+    },
+    {
+      "id": "fallback-definition-audit",
+      "summary": "审计13个备用词典词条的词性、词头、释义、法律语境与例句一致性；不确定项暂停，不猜改。",
+      "state": "confirmed",
+      "priority": "core",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "required_evidence": [
+        "artifacts/release-gate/question-quality-focus/fallback-audit.json",
+        "artifacts/release-gate/question-quality-focus/real-migration.json"
+      ],
+      "evidence": [
+        "artifacts/release-gate/question-quality-focus/fallback-audit.json",
+        "artifacts/release-gate/question-quality-focus/real-migration.json"
+      ],
+      "verification_commands": [
+        "node --import tsx server/src/tests/fallbackQualityAudit.ts",
+        "node scripts/verify-question-quality-focus-runtime.mjs"
+      ]
+    },
+    {
+      "id": "focus-state-machine",
+      "summary": "首次错进入同场强化；同场强化再错进入focus；后续独立复习连续答对两次退出focus。",
+      "state": "confirmed",
+      "priority": "core",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "required_evidence": [
+        "artifacts/release-gate/question-quality-focus/isolated-checkpoint.json",
+        "artifacts/release-gate/question-quality-focus/real-focus-api.json"
+      ],
+      "evidence": [
+        "artifacts/release-gate/question-quality-focus/isolated-checkpoint.json",
+        "artifacts/release-gate/question-quality-focus/real-focus-api.json"
+      ],
+      "verification_commands": [
+        "node --import tsx server/src/tests/questionQualityFocusCheckpoint.ts",
+        "node --import tsx server/src/tests/questionQualityFocusHttp.ts"
+      ]
+    },
+    {
+      "id": "focus-only-entry",
+      "summary": "首页重点入口只读取显式focus队列，不读取所有历史wrongCount词条。",
+      "state": "confirmed",
+      "priority": "core",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "required_evidence": [
+        "artifacts/release-gate/question-quality-focus/real-focus-api.json",
+        "artifacts/release-gate/question-quality-focus/focus-home-400px.png",
+        "artifacts/release-gate/question-quality-focus/focus-quiz-400px.png"
+      ],
+      "evidence": [
+        "artifacts/release-gate/question-quality-focus/isolated-checkpoint.json",
+        "artifacts/release-gate/question-quality-focus/real-focus-api.json",
+        "artifacts/release-gate/question-quality-focus/focus-home-400px.png",
+        "artifacts/release-gate/question-quality-focus/focus-quiz-400px.png"
+      ],
+      "verification_commands": [
+        "node node_modules/typescript/bin/tsc -p web/tsconfig.json --noEmit",
+        "node scripts/verify-question-quality-focus-runtime.mjs"
+      ]
+    }
+  ],
+  "real_path_checks": [
+    {
+      "id": "focus-entry-400px",
+      "status": "passed",
+      "verification_commands": [
+        "node scripts/verify-question-quality-focus-runtime.mjs"
+      ],
+      "required_evidence": [
+        "artifacts/release-gate/question-quality-focus/visual-qa.json",
+        "artifacts/release-gate/question-quality-focus/focus-home-400px.png",
+        "artifacts/release-gate/question-quality-focus/focus-quiz-400px.png",
+        "artifacts/release-gate/question-quality-focus/question-issue-wrong-result-400px.png"
+      ],
+      "evidence": [
+        "artifacts/release-gate/question-quality-focus/visual-qa.json",
+        "artifacts/release-gate/question-quality-focus/focus-home-400px.png",
+        "artifacts/release-gate/question-quality-focus/focus-quiz-400px.png",
+        "artifacts/release-gate/question-quality-focus/question-issue-wrong-result-400px.png"
+      ]
+    }
+  ]
+}

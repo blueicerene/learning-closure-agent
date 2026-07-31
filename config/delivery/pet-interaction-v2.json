@@ -1,0 +1,135 @@
+{
+  "schema_version": 1,
+  "iteration": "pet-interaction-v2",
+  "core_goal": "让大王在待机、悬停和左右拖动时呈现自然、连续且方向正确的交互动画，同时保持透明窗口和图片拖放识词稳定。",
+  "contract_owner": "PMO",
+  "status": "ready",
+  "user_acceptance": {
+    "status": "passed",
+    "confirmed_at": "2026-07-30",
+    "note": "用户确认悬停坐姿、左右拖动行走与松开回坐姿验收通过。"
+  },
+  "in_scope": [
+    "pet-hover-sit-head-tilt",
+    "pet-directional-drag-walk",
+    "pet-interaction-transition",
+    "pet-interaction-regression"
+  ],
+  "out_of_scope": [
+    "修改查词、测试、词库、日历或提醒逻辑",
+    "替换大王身份、礼服造型或改为卡通猫",
+    "未经用户视觉确认直接替换运行版",
+    "重做所有非交互学习状态动画"
+  ],
+  "do_not_break": [
+    "鼠标未悬停时继续使用现有站立踢球待机动画",
+    "桌宠窗口保持透明、无方框、始终可见且可手动拖动",
+    "图片拖入仍进入现有OCR与查词流程",
+    "中文气泡和学习状态逻辑保持可用"
+  ],
+  "decisions": [
+    {
+      "id": "pet-hover-sit-head-tilt",
+      "summary": "鼠标停留在大王身上且静止时，切换为自然的坐姿歪头循环。",
+      "state": "confirmed",
+      "priority": "core",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "required_evidence": [
+        "artifacts/release-gate/pet-interaction/hover-sit-preview.gif"
+      ],
+      "evidence": [
+        "artifacts/release-gate/pet-interaction/hover-sit-preview.gif",
+        "artifacts/release-gate/pet-interaction/preview-contact-sheet.png",
+        "artifacts/release-gate/pet-interaction/preview-qa.json"
+      ],
+      "verification_commands": [
+        "scripts/verify-pet-interaction.sh"
+      ]
+    },
+    {
+      "id": "pet-directional-drag-walk",
+      "summary": "用户拖动桌宠向左或向右时，分别播放方向一致的连续行走动画。",
+      "state": "confirmed",
+      "priority": "core",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "required_evidence": [
+        "artifacts/release-gate/pet-interaction/drag-left-preview.gif",
+        "artifacts/release-gate/pet-interaction/drag-right-preview.gif"
+      ],
+      "evidence": [
+        "artifacts/release-gate/pet-interaction/drag-left-preview.gif",
+        "artifacts/release-gate/pet-interaction/drag-right-preview.gif",
+        "artifacts/release-gate/pet-interaction/preview-contact-sheet.png",
+        "artifacts/release-gate/pet-interaction/preview-qa.json"
+      ],
+      "verification_commands": [
+        "scripts/verify-pet-interaction.sh"
+      ]
+    },
+    {
+      "id": "pet-interaction-transition",
+      "summary": "未悬停踢球、悬停坐姿、拖动行走和松开回坐姿之间切换平滑，方向判断无抖动。",
+      "state": "confirmed",
+      "priority": "core",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "required_evidence": [
+        "artifacts/release-gate/pet-interaction/interaction-state-sequence.json"
+      ],
+      "evidence": [
+        "artifacts/release-gate/pet-interaction/interaction-state-sequence.json",
+        "artifacts/release-gate/pet-interaction/runtime-idle.png",
+        "artifacts/release-gate/pet-interaction/runtime-after-drag-left.png",
+        "artifacts/release-gate/pet-interaction/runtime-after-drag-right.png"
+      ],
+      "verification_commands": [
+        "scripts/verify-pet-interaction.sh"
+      ]
+    },
+    {
+      "id": "pet-interaction-regression",
+      "summary": "新增鼠标交互不得破坏透明窗口、手动拖动、图片拖放识词、中文气泡和学习状态。",
+      "state": "confirmed",
+      "priority": "core",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "required_evidence": [
+        "artifacts/release-gate/pet-interaction/regression.json"
+      ],
+      "evidence": [
+        "artifacts/release-gate/pet-interaction/regression.json"
+      ],
+      "verification_commands": [
+        "scripts/verify-pet-interaction.sh"
+      ]
+    }
+  ],
+  "real_path_checks": [
+    {
+      "id": "pet-interaction-preview",
+      "status": "passed",
+      "verification_commands": [
+        "scripts/verify-pet-interaction.sh"
+      ],
+      "required_evidence": [
+        "artifacts/release-gate/pet-interaction/hover-sit-preview.gif",
+        "artifacts/release-gate/pet-interaction/drag-left-preview.gif",
+        "artifacts/release-gate/pet-interaction/drag-right-preview.gif",
+        "artifacts/release-gate/pet-interaction/interaction-state-sequence.json",
+        "artifacts/release-gate/pet-interaction/regression.json"
+      ],
+      "evidence": [
+        "artifacts/release-gate/pet-interaction/hover-sit-preview.gif",
+        "artifacts/release-gate/pet-interaction/drag-left-preview.gif",
+        "artifacts/release-gate/pet-interaction/drag-right-preview.gif",
+        "artifacts/release-gate/pet-interaction/interaction-state-sequence.json",
+        "artifacts/release-gate/pet-interaction/regression.json",
+        "artifacts/release-gate/pet-interaction/runtime-idle.png",
+        "artifacts/release-gate/pet-interaction/runtime-after-drag-left.png",
+        "artifacts/release-gate/pet-interaction/runtime-after-drag-right.png"
+      ]
+    }
+  ]
+}

@@ -1,14 +1,21 @@
 {
   "name": "learning-closure-agent",
   "private": true,
-  "version": "0.1.0",
+  "version": "2.0.0",
   "workspaces": [
     "extension",
-    "server"
+    "server",
+    "web"
   ],
   "scripts": {
     "dev:server": "npm --workspace server run dev",
     "dev:extension": "npm --workspace extension run dev",
-    "build": "npm --workspaces run build"
+    "dev:web": "npm --workspace web run dev",
+    "dev:dropper": "scripts/run-codex-pet.sh",
+    "test:pet": "scripts/run-codex-pet.sh --self-test",
+    "build": "npm --workspaces run build",
+    "release:gate": "python3 scripts/release_gate.py --contract config/delivery/daily-plan-v1.json --run-commands && python3 scripts/release_gate.py --contract config/delivery/question-quality-focus-v1.json --run-commands && python3 scripts/release_gate.py --contract config/delivery/quiz-feedback-v1.json --run-commands && python3 scripts/release_gate.py --contract config/delivery/library-safety-v1.json --run-commands && python3 scripts/release_gate.py --contract config/delivery/v2-closeout.json --run-commands && python3 scripts/release_gate.py --contract config/delivery/v2-positioning-sync.json --run-commands",
+    "release:gate:daily-plan": "python3 scripts/release_gate.py --contract config/delivery/daily-plan-v1.json --run-commands",
+    "audit:decisions": "python3 scripts/decision_coverage_audit.py --ledger config/delivery/master-decision-ledger.json --contract config/delivery/daily-plan-v1.json --contract config/delivery/question-quality-focus-v1.json --contract config/delivery/quiz-feedback-v1.json --contract config/delivery/library-safety-v1.json --contract config/delivery/pet-reclining-idle-v1.json --contract config/delivery/pet-interaction-v2.json --contract config/delivery/pet-hover-natural-v1.json --contract config/delivery/pet-idle-hover-micro-motion-v1.json --contract config/delivery/pet-natural-motion-v1.json --contract config/delivery/pet-natural-motion-v3.json --contract config/delivery/pet-natural-motion-v3-runtime.json --contract config/delivery/v2-closeout.json --contract config/delivery/v2-positioning-sync.json"
   }
 }

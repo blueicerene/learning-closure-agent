@@ -1,6 +1,10 @@
 node_modules
 dist
 .npm-cache
+.pnpm-store
+pnpm-lock.yaml
+.runtime-bin
+codex-pet/
 .env
 .DS_Store
 *.log
@@ -8,8 +12,24 @@ server/.env
 .env.*
 server/.env.*
 output
+artifacts
 server/dist
 extension/dist
+web/dist
+**/__pycache__/
+
+# Desktop dropper experimental/generated variants not used by the stable icon
+desktop-dropper/assets/action-sleep-breathe-frame-*.png
+desktop-dropper/assets/dropper-icon-frame-*.png
+desktop-dropper/assets/action-belly.png
+desktop-dropper/assets/action-play.png
+desktop-dropper/assets/action-sit.png
+desktop-dropper/assets/action-sleep.png
+desktop-dropper/assets/dropper-source.png
+desktop-dropper/assets/references/
+desktop-dropper/assets/*-master-chroma.png
+desktop-dropper/assets/state-curious-left-frame-*.png
+desktop-dropper/assets/state-curious-right-frame-*.png
 
 # Keep example env files trackable
 !.env.example

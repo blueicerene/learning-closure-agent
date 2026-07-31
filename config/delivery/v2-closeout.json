@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "iteration": "v2-closeout",
+  "core_goal": "把法律英语复习小程序当前已验收能力固化为可构建、可审计且不泄露本地学习数据的 V2 稳定基线。",
+  "contract_owner": "PMO",
+  "status": "ready",
+  "in_scope": ["v2-release-baseline"],
+  "out_of_scope": [
+    "iPhone iCloud 提醒同步的设备验收",
+    "自动调整每日20/10配额",
+    "新的桌宠动画或产品功能",
+    "上传真实词库、备份、API Key或验收截图"
+  ],
+  "do_not_break": [
+    "查词与测试使用当前已验收真实路径",
+    "每日计划保持冻结且校准期最多20题/10个待进入计划词",
+    "词库质量问题不作为用户记忆错误",
+    "每日20:00提醒不重复",
+    "大王保持透明拖放与当前自然动作基线",
+    "真实学习数据和密钥不进入Git"
+  ],
+  "decisions": [
+    {
+      "id": "v2-release-baseline",
+      "summary": "V2版本、文档、隐私排除和桌宠运行资产形成可复现发布基线。",
+      "state": "confirmed",
+      "priority": "core",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "verification_commands": ["node scripts/verify-v2-closeout.mjs"],
+      "required_evidence": ["artifacts/release-gate/v2-closeout/release-baseline.json"],
+      "evidence": ["artifacts/release-gate/v2-closeout/release-baseline.json"]
+    }
+  ],
+  "real_path_checks": []
+}

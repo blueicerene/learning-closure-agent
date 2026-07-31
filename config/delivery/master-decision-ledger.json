@@ -1,0 +1,780 @@
+{
+  "schema_version": 1,
+  "ledger": "learning-assistant-master",
+  "updated_at": "2026-07-31",
+  "allowed_routes": [
+    "current_iteration",
+    "future_milestone",
+    "awaiting_user_acceptance",
+    "already_verified",
+    "rejected_with_reason"
+  ],
+  "decisions": [
+    {
+      "id": "REL-01",
+      "topic": "V2 暂时结项",
+      "summary": "法律英语复习小程序 V2 以当前已验收的查词、测试、词库、每日提醒、Daily Plan v2、日历与大王桌宠能力作为稳定基线，并同步到 GitHub。",
+      "route": "already_verified",
+      "owner": "PMO+Codex+user",
+      "delivery_state": "verified_release_baseline",
+      "acceptance_status": "passed",
+      "user_observation": "用户于 2026-07-31 明确提出法律英语复习小程序 V2 暂时结项并同步 GitHub。此前已分别确认查词和测试、每日提醒、词库阶段与当前桌宠动画基线。",
+      "trigger_or_verification": "V2 版本号、发布说明、隐私排除、运行资产完整性、构建、核心 release gates、decision coverage 与桌宠自检全部通过后提交并推送。",
+      "contract_ids": ["v2-release-baseline"]
+    },
+    {
+      "id": "REL-02",
+      "topic": "V2 产品定位与 GitHub 默认展示",
+      "summary": "项目主定位更新为本地优先的法律英语查词与间隔复习工作台，包含网页/PDF/图片查词、每日计划、Chrome 学习工具和大王 macOS 桌宠；最初的学习收尾能力仅作为兼容模块保留。GitHub 默认分支 README、About 描述和扩展公开文案必须一致反映该定位。",
+      "route": "current_iteration",
+      "owner": "PMO+Codex",
+      "delivery_state": "implementation_in_progress",
+      "acceptance_status": "user_confirmed_scope",
+      "user_observation": "用户于 2026-07-31 指出 GitHub About 和默认 README 仍在介绍最初的一键知识捕获/学习收尾产品，要求按已经结项的法律英语复习小程序 V2 同步修改。",
+      "trigger_or_verification": "README、Project Charter、Security 与扩展公开文案完成定位扫描和构建验证；V2 以非破坏性合并进入 GitHub 默认 main；仓库 About 描述同步更新后再标记通过。",
+      "evidence": [
+        "README.md",
+        "docs/PROJECT_CHARTER.md",
+        "docs/SECURITY.md",
+        "extension/public/manifest.json"
+      ],
+      "contract_ids": ["v2-public-positioning"]
+    },
+    {
+      "id": "DP-01",
+      "topic": "每日计划",
+      "summary": "首个约 7 天校准期，每日冻结计划最多 20 题。",
+      "route": "current_iteration",
+      "owner": "server",
+      "delivery_state": "verified_on_read_only_real_copy",
+      "trigger_or_verification": "当前真实词库只读副本生成的计划总数必须 <=20。",
+      "evidence": [
+        "artifacts/release-gate/daily-plan/plan-total-at-most-20.json",
+        "artifacts/release-gate/daily-plan/real-store-bounded-plan.json"
+      ],
+      "contract_ids": ["plan-total-at-most-20"]
+    },
+    {
+      "id": "DP-02",
+      "topic": "每日计划",
+      "summary": "每日最多释放 10 个待进入计划词；到期复习占满容量时不释放新词。",
+      "route": "current_iteration",
+      "owner": "server",
+      "delivery_state": "verified_on_read_only_real_copy",
+      "trigger_or_verification": "积压和无积压 fixture 均证明新词数 <=10，且到期复习优先。",
+      "evidence": [
+        "artifacts/release-gate/daily-plan/new-items-at-most-10.json",
+        "artifacts/release-gate/daily-plan/real-store-bounded-plan.json"
+      ],
+      "contract_ids": ["new-items-at-most-10"]
+    },
+    {
+      "id": "DP-03",
+      "topic": "每日计划",
+      "summary": "已学习到期复习与待进入计划词分池；待学习池不作为今日债务。",
+      "route": "current_iteration",
+      "owner": "server",
+      "delivery_state": "verified_on_read_only_real_copy",
+      "trigger_or_verification": "从未答题词只在剩余容量进入计划；本阶段验证服务端分池，首页展示仍待后续 Web 阶段。",
+      "evidence": [
+        "artifacts/release-gate/daily-plan/separate-review-and-pending-pools.json",
+        "artifacts/release-gate/daily-plan/real-store-bounded-plan.json"
+      ],
+      "contract_ids": ["separate-review-and-pending-pools"]
+    },
+    {
+      "id": "DP-04",
+      "topic": "每日计划",
+      "summary": "当天计划开始后冻结；后续查词保存只进入待学习池，从次日才可参与候选。",
+      "route": "current_iteration",
+      "owner": "server",
+      "delivery_state": "verified_on_read_only_real_copy",
+      "trigger_or_verification": "冻结后保存新词，计划 ID、总数和顺序均不变化。",
+      "evidence": [
+        "artifacts/release-gate/daily-plan/frozen-plan-does-not-expand.json",
+        "artifacts/release-gate/daily-plan/real-store-bounded-plan.json"
+      ],
+      "contract_ids": ["frozen-plan-does-not-expand"]
+    },
+    {
+      "id": "DP-05",
+      "topic": "每日计划",
+      "summary": "今日测试只消费冻结计划；中途返回从下一道未作答题继续，不重新排程。",
+      "route": "current_iteration",
+      "owner": "server+web",
+      "delivery_state": "verified_real_runtime_and_isolated_resume",
+      "trigger_or_verification": "真实运行的复习 API 仅返回冻结计划中的 16 个未完成 ID；隔离副本完成 2 题后重新读取，保持原冻结顺序并从下一道未完成题继续。",
+      "evidence": [
+        "artifacts/release-gate/daily-plan/review-returns-frozen-plan-only.json",
+        "artifacts/release-gate/daily-plan/real-store-bounded-plan.json",
+        "artifacts/release-gate/daily-plan/home-and-quiz-share-plan-counts.json",
+        "artifacts/release-gate/daily-plan/resume-frozen-plan.json"
+      ],
+      "contract_ids": ["review-returns-frozen-plan-only"]
+    },
+    {
+      "id": "DP-06",
+      "topic": "每日计划迁移",
+      "summary": "旧 142 题计划迁移为不超过 20 题，保留今天已完成 4 题且不改学习历史。",
+      "route": "current_iteration",
+      "owner": "server+PMO",
+      "delivery_state": "verified_real_migration",
+      "trigger_or_verification": "真实计划已由 142/4 原子迁移为 20/4；备份可读，4 个完成 ID 原序保留，迁移时 items、reviewState 与答题事件保护哈希不变。",
+      "evidence": [
+        "artifacts/release-gate/daily-plan/migrate-today-preserving-four-completions.json",
+        "artifacts/release-gate/daily-plan/migration-history-integrity.json"
+      ],
+      "contract_ids": ["migrate-today-preserving-four-completions"]
+    },
+    {
+      "id": "DP-07",
+      "topic": "每日计划进度",
+      "summary": "首页、学习状态与测试页面使用同一计划总数、完成数和剩余数。",
+      "route": "current_iteration",
+      "owner": "server+web",
+      "delivery_state": "verified_real_runtime",
+      "trigger_or_verification": "真实首页显示 4/20；学习状态 API 为 20/4 且 dueToday=16；测试 API 严格返回冻结计划剩余 16 个 ID；桌宠轮询后可见提示为“待复习 16”，读取前后词库哈希不变。",
+      "evidence": [
+        "artifacts/release-gate/daily-plan/home-and-quiz-share-plan-counts.json",
+        "artifacts/release-gate/daily-plan/home-and-quiz-share-plan-counts.png",
+        "artifacts/release-gate/daily-plan/pet-frozen-remaining-16.json",
+        "artifacts/release-gate/daily-plan/pet-frozen-remaining-16.jpeg",
+        "artifacts/release-gate/daily-plan/home-frozen-plan-20-4.jpeg"
+      ],
+      "contract_ids": ["home-and-quiz-share-plan-counts"]
+    },
+    {
+      "id": "CAL-01",
+      "topic": "完成日历",
+      "summary": "首页显示最近 7 天并可查看整月；完整完成日使用 IMG_0038 的大王真实正面头部裁切，今天及过去所有未完整完成日使用用户确认的大王背影标记，未来日期留白；不使用线条、空心、黑白化头像或生成全身动画。",
+      "route": "already_verified",
+      "owner": "web",
+      "delivery_state": "verified_real_runtime",
+      "trigger_or_verification": "400px 真实路径验证最近 7 天、今日边框与 4/20 计划；fixture 验证完整完成=正面头像、部分/未开始=背影、未来=留白，并验证整月展开与透明边缘；最终一题后同步刷新所选月份，真实 20/20 重新加载验证最近 7 天与整月均为正面头像。",
+      "evidence": [
+        "artifacts/release-gate/daily-plan/calendar-completion-markers.json",
+        "artifacts/release-gate/daily-plan/calendar-completion-markers.png",
+        "artifacts/release-gate/daily-plan/calendar-real-7day-400px.png",
+        "artifacts/release-gate/daily-plan/calendar-month-markers-400px.png",
+        "artifacts/release-gate/daily-plan/calendar-final-answer-refresh.json",
+        "artifacts/release-gate/daily-plan/calendar-final-answer-front-real.png",
+        "artifacts/release-gate/daily-plan/calendar-final-answer-front-month-real.png"
+      ],
+      "contract_ids": ["calendar-completion-markers"]
+    },
+    {
+      "id": "DP-08",
+      "topic": "退出与跨日",
+      "summary": "计划开始后未完成离开才提醒；确认退出则当天不计完成，剩余复习回队列、新词回待学习池，次日重新生成而不累加债务。",
+      "route": "future_milestone",
+      "owner": "server+web",
+      "delivery_state": "not_implemented",
+      "trigger_or_verification": "missed-day 与 return-next-day 场景在 Plan v2 稳定后实施。",
+      "contract_ids": []
+    },
+    {
+      "id": "DP-09",
+      "topic": "完成判定",
+      "summary": "完成以原冻结计划是否全部作答为准；答错也完成原题，强化题不作为完整完成的额外门槛。",
+      "route": "future_milestone",
+      "owner": "server",
+      "delivery_state": "partially_implemented",
+      "trigger_or_verification": "答错、同场强化和容量不足三个场景不得阻断原计划完成。",
+      "contract_ids": []
+    },
+    {
+      "id": "DP-10",
+      "topic": "日期边界",
+      "summary": "使用用户当地日期，次日 02:00 前完成仍计前一日；逾期后当前连续归零但保留最长与累计完成。",
+      "route": "current_iteration",
+      "owner": "server",
+      "delivery_state": "partially_implemented",
+      "trigger_or_verification": "02:00 学习日边界已通过 23:59、00:00、01:59、02:00 测试及 2026-07-28 真实完成迁移；漏日归零、最长与累计完成仍属后续范围。",
+      "contract_ids": [
+        "two-am-learning-day-cutoff"
+      ],
+      "code_evidence": [
+        "server/src/services/vocab.ts:learningDayKey",
+        "server/src/tests/dailyPlanRelease.ts:runLearningDayCutoffContract"
+      ],
+      "runtime_evidence": [
+        "artifacts/release-gate/daily-plan/two-am-learning-day-cutoff.json",
+        "artifacts/release-gate/daily-plan/midnight-cutoff-repair.json"
+      ]
+    },
+    {
+      "id": "LIB-01",
+      "topic": "词库出题安全",
+      "summary": "词库使用唯一的题目资格判断；任何待确认词都不得作为题目或干扰项。",
+      "route": "current_iteration",
+      "owner": "server+web",
+      "delivery_state": "verified_on_read_only_real_copy",
+      "trigger_or_verification": "隔离副本同时覆盖显式 questionQuality=pending-review 与旧 reference/dictionary 待确认词，review API 的题目和全部选项均不得包含这些词条。",
+      "contract_ids": ["quality-eligibility-single-source"]
+    },
+    {
+      "id": "LIB-02",
+      "topic": "词库质量操作",
+      "summary": "确认无误、重新查询和编辑必须更新同一质量状态，成功后真实解除待确认；失败不得伪装成功或获得出题资格。",
+      "route": "current_iteration",
+      "owner": "server+web",
+      "delivery_state": "verified_on_real_path_user_accepted_with_known_limitation",
+      "trigger_or_verification": "隔离副本验证三种操作前后质量状态、待确认计数和出题资格一致；用户已明确接受当前词库阶段，重新查询失败后的纠错体验另记 LIB-07。",
+      "evidence": [
+        "artifacts/release-gate/library-safety/quality-actions.json",
+        "artifacts/release-gate/library-safety/quality-repair-user-acceptance-failure.json",
+        "artifacts/release-gate/library-safety/library-stage-user-acceptance.json"
+      ],
+      "contract_ids": ["quality-actions-consistent"]
+    },
+    {
+      "id": "LIB-03",
+      "topic": "词库安全移出",
+      "summary": "进入学习历史的错误词不做破坏性删除；应停止后续出题、清除错误内容造成的记忆信号，并保留已完成历史记录。",
+      "route": "current_iteration",
+      "owner": "server+web",
+      "delivery_state": "verified_on_real_path",
+      "trigger_or_verification": "真实授权写入验证错误长句从未完成计划移除、历史完成计划引用保留、答错/重点/强化信号清零；桌面与400px页面显示独立的已移出筛选且不再提供学习操作。",
+      "evidence": [
+        "artifacts/release-gate/library-safety/safe-retirement.json",
+        "artifacts/release-gate/library-safety/library-desktop.png"
+      ],
+      "contract_ids": ["safe-library-retirement"]
+    },
+    {
+      "id": "LIB-04",
+      "topic": "词库日期口径",
+      "summary": "明日复习与每日计划使用相同的 Toronto 当地学习日及次日 02:00 边界，不使用 UTC 日期推算。",
+      "route": "current_iteration",
+      "owner": "server+web",
+      "delivery_state": "verified_on_real_path",
+      "trigger_or_verification": "覆盖午夜前后与 02:00 边界测试；真实页面在 Toronto 7 月 29 日显示 7 月 30 日而非 7 月 31 日的明日词条。",
+      "evidence": [
+        "artifacts/release-gate/library-safety/learning-day-date.json",
+        "artifacts/release-gate/library-safety/library-semantics.json"
+      ],
+      "contract_ids": ["learning-day-library-date"]
+    },
+    {
+      "id": "LIB-05",
+      "topic": "词库响应式布局",
+      "summary": "桌面词库内容不重叠，操作可见；390/400px 窄屏改为可读的逐词布局，不依赖超宽横向表格。",
+      "route": "current_iteration",
+      "owner": "web",
+      "delivery_state": "verified_on_real_path",
+      "trigger_or_verification": "真实 214 词页面在桌面与 400px 截图中无文字覆盖、零宽操作列或不可达操作。",
+      "evidence": [
+        "artifacts/release-gate/library-safety/library-desktop.png",
+        "artifacts/release-gate/library-safety/library-400px.png"
+      ],
+      "contract_ids": ["library-responsive-layout"]
+    },
+    {
+      "id": "LIB-06",
+      "topic": "词库信息语义",
+      "summary": "学习状态、历史错题和质量维护入口必须使用符合真实数据含义的中文，不把非 mastered 全部称为学习中，也不把仅重标元数据称为补全释义。",
+      "route": "current_iteration",
+      "owner": "web+PMO",
+      "delivery_state": "verified_on_real_path",
+      "trigger_or_verification": "真实页面标签与服务端筛选口径逐项核对；用户可区分待进入计划、复习中、历史错题和待确认。",
+      "evidence": [
+        "artifacts/release-gate/library-safety/library-semantics.json"
+      ],
+      "contract_ids": ["library-filter-language"]
+    },
+    {
+      "id": "LIB-07",
+      "topic": "低质量词修复闭环",
+      "summary": "待确认词重新查询失败时，明确说明原因并引导用户编辑词面或删除；不把原错误词面的失败结果伪装成已修复。",
+      "route": "future_milestone",
+      "owner": "server+web",
+      "delivery_state": "not_implemented_user_accepted_current_stage",
+      "trigger_or_verification": "用户后续明确排期低质量词修复体验时实施；真实验收覆盖 The Prank Panel 这类 OCR 错词的重新查询失败、编辑纠正和恢复出题资格。",
+      "evidence": [
+        "artifacts/release-gate/library-safety/quality-repair-user-acceptance-failure.json",
+        "artifacts/release-gate/library-safety/library-stage-user-acceptance.json"
+      ],
+      "contract_ids": []
+    },
+    {
+      "id": "LIB-08",
+      "topic": "整句误收质量保护",
+      "summary": "明显整句正文片段自动暂停出题，不能靠一次人工确认绕过；用户应先修正词面或安全移出。",
+      "route": "current_iteration",
+      "owner": "server+web",
+      "delivery_state": "verified_on_real_path",
+      "trigger_or_verification": "隔离测试覆盖整句保存、人工确认阻断与编辑恢复；真实错误长句已安全移出且不再出现在2026-07-31冻结题目中。",
+      "evidence": [
+        "artifacts/release-gate/library-safety/sentence-fragment-guard.json",
+        "artifacts/release-gate/library-safety/safe-retirement.json"
+      ],
+      "contract_ids": ["sentence-fragment-quality-guard"]
+    },
+    {
+      "id": "IMP-01",
+      "topic": "自动重要词",
+      "summary": "上线后同一词有效主动查询累计 >=2 次自动重要；事件去重，旧历史未知，仅影响未来新词候选排序。",
+      "route": "already_verified",
+      "owner": "server+web+extension",
+      "delivery_state": "verified",
+      "trigger_or_verification": "server vocab fixture 已覆盖第一次、第二次、并发去重；词库显示次数与重要徽标。",
+      "code_evidence": [
+        "server/src/services/vocab.ts:isImportantLookupStats",
+        "server/src/tests/vocabFixture.ts:tracked lookup assertions",
+        "web/src/main.tsx:lookup count badge"
+      ],
+      "contract_ids": []
+    },
+    {
+      "id": "LOOKUP-01",
+      "topic": "浏览器查词入口",
+      "summary": "网页查词路径尽量零点击；受浏览器限制或误触风险影响时，最多一次明确点击后直接显示词汇结果。右键菜单只保留“查词”，不得加入复习分流、确认页或额外开始步骤；首页和桌宠复习入口不受影响。",
+      "route": "awaiting_user_acceptance",
+      "owner": "extension",
+      "delivery_state": "implemented_build_verified_awaiting_extension_reload",
+      "trigger_or_verification": "扩展构建与产物检查确认右键菜单只注册一个“查词”动作，选择后直接进入既有查询结果；重新加载 unpacked extension 后在普通网页与 Chrome 内置 PDF Viewer 实机确认。首页、popup 与桌宠复习入口保持可用。",
+      "code_evidence": [
+        "extension/src/background/background.ts:installContextMenus",
+        "extension/src/background/background.ts:openLookupTerm",
+        "extension/dist/assets/background.js"
+      ],
+      "needs_user_confirmation": true,
+      "contract_ids": []
+    },
+    {
+      "id": "PDF-01",
+      "topic": "PDF 查词入口",
+      "summary": "不开发或维护自有 PDF 阅读器；Chrome 内置 PDF Viewer 中使用单一右键“查词”入口。",
+      "route": "rejected_with_reason",
+      "owner": "PMO",
+      "delivery_state": "rejected_not_on_roadmap",
+      "reason": "用户明确拒绝自有 PDF 阅读器；其额外渲染、文件权限与维护成本不符合当前产品范围。",
+      "trigger_or_verification": "路线图与实现不得新增 PDF.js 或其他自有 PDF Viewer；PDF 查词继续遵循一次明确点击直达结果的入口原则。",
+      "contract_ids": []
+    },
+    {
+      "id": "FOCUS-01",
+      "topic": "重点复习",
+      "summary": "首次答错只反馈并安排同场稍后再检索；同场再错才进入重点复习。",
+      "route": "current_iteration",
+      "owner": "server+web",
+      "delivery_state": "verified",
+      "trigger_or_verification": "隔离服务与HTTP路由均通过首次错、同场强化再错进入focus、两次独立答对退出；真实focus API只返回4个显式重点词；测试页已移除历史错题队列入口。",
+      "evidence": [
+        "artifacts/release-gate/question-quality-focus/isolated-checkpoint.json",
+        "artifacts/release-gate/question-quality-focus/real-focus-api.json",
+        "artifacts/release-gate/question-quality-focus/focus-quiz-400px.png"
+      ],
+      "contract_ids": ["focus-state-machine"]
+    },
+    {
+      "id": "FOCUS-02",
+      "topic": "重点复习",
+      "summary": "重点词在后续独立复习机会连续答对两次后恢复普通间隔；与重复查询重要信号分离，界面只显示更高优先级的重点复习标签。",
+      "route": "current_iteration",
+      "owner": "server+web",
+      "delivery_state": "verified",
+      "trigger_or_verification": "隔离HTTP路由已验证focus进入和两次独立答对退出；真实运行路径显示单一重点标签并排除仅有历史wrongCount的词。",
+      "evidence": [
+        "artifacts/release-gate/question-quality-focus/isolated-checkpoint.json",
+        "artifacts/release-gate/question-quality-focus/real-focus-api.json",
+        "artifacts/release-gate/question-quality-focus/focus-home-400px.png"
+      ],
+      "contract_ids": ["focus-state-machine", "focus-only-entry"]
+    },
+    {
+      "id": "FOCUS-03",
+      "topic": "重点复习轮次",
+      "summary": "重点复习按冻结轮次持久记录题目与已作答项；中途离开或刷新后从下一未答题继续，同一轮不得重复累计巩固，只有下一独立轮次的正确作答才能推进第二次恢复。",
+      "route": "awaiting_user_acceptance",
+      "owner": "server+web+user",
+      "delivery_state": "implemented_isolated_verified",
+      "acceptance_status": "awaiting_real_focus_round",
+      "needs_user_confirmation": true,
+      "trigger_or_verification": "隔离 HTTP 已验证四题完成后刷新保持4/4、显式重开才创建新轮次、同轮重试不重复累计；待真实词库再次出现重点词时完成一次中途退出/返回与两轮巩固实机验收。",
+      "evidence": [
+        "artifacts/release-gate/focus-round/focus-round-verification.json",
+        "server/src/tests/focusRoundPersistenceHttp.ts",
+        "web/src/tests/focusRoundFixture.ts"
+      ],
+      "contract_ids": []
+    },
+    {
+      "id": "TEST-01",
+      "topic": "测试形式与结果",
+      "summary": "始终使用四选一；无论答对答错，结果页展示可点击发音、法律语境和例句，并由用户点击下一题。",
+      "route": "current_iteration",
+      "owner": "server+web+PMO",
+      "delivery_state": "real_path_verified_with_explicit_pending_content",
+      "trigger_or_verification": "真实运行页面已覆盖答对、答错、字段缺失三条路径；全库198词完成194词，4个未通过内容质量门槛的旧词保持待补/待检查。未来新词异步补全已显式启用。",
+      "evidence": [
+        "artifacts/release-gate/quiz-feedback/checkpoint-api-result.json",
+        "artifacts/release-gate/quiz-feedback/correct-result-400px.png",
+        "artifacts/release-gate/quiz-feedback/wrong-result-400px.png",
+        "artifacts/release-gate/quiz-feedback/missing-result-400px.png",
+        "artifacts/release-gate/quiz-feedback/real-library-enrichment.json",
+        "artifacts/release-gate/quiz-feedback/correct-result-real-ui.png",
+        "artifacts/release-gate/quiz-feedback/wrong-result-real-ui.png",
+        "artifacts/release-gate/quiz-feedback/missing-result-real-ui.png"
+      ],
+      "contract_ids": [
+        "review-payload-feedback-fields",
+        "correct-and-wrong-result-details",
+        "missing-content-explicit-fallback",
+        "safe-real-content-enrichment"
+      ]
+    },
+    {
+      "id": "TEST-02",
+      "topic": "题目质量反馈",
+      "summary": "结果页提供低调的题目有问题入口；标记后不计错、从当天计划移出并视为已处理，修复前暂停测试。",
+      "route": "current_iteration",
+      "owner": "server+web",
+      "delivery_state": "verified",
+      "trigger_or_verification": "municipal已按用户确认A方案精确备份并修正为形容词法律义，错题/重点信号清零且计划完成记录保留；13词审计与题目问题HTTP路径通过。",
+      "evidence": [
+        "artifacts/release-gate/question-quality-focus/isolated-checkpoint.json",
+        "artifacts/release-gate/question-quality-focus/fallback-audit.json",
+        "artifacts/release-gate/question-quality-focus/real-migration.json",
+        "artifacts/release-gate/question-quality-focus/question-issue-wrong-result-400px.png"
+      ],
+      "contract_ids": ["question-quality-exemption", "fallback-definition-audit"]
+    },
+    {
+      "id": "PET-01",
+      "topic": "桌宠基础能力",
+      "summary": "透明无方框、始终可见、可拖动、可接收图片并进入识词流程；中文气泡与学习状态不被破坏。",
+      "route": "already_verified",
+      "owner": "desktop-pet",
+      "delivery_state": "verified",
+      "trigger_or_verification": "Codex Pet self-test、签名检查与既有拖图真实路径已通过。",
+      "code_evidence": [
+        "desktop-dropper/LegalVocabDropper.swift:runCodexPetSelfTest",
+        "scripts/build-codex-pet-binary.sh"
+      ],
+      "contract_ids": []
+    },
+    {
+      "id": "PET-02",
+      "topic": "桌宠视觉",
+      "summary": "每一个可见状态都应有自然、连续且符合该状态的生命感；不得呈现为静态照片或生硬图片切换。",
+      "route": "already_verified",
+      "owner": "desktop-pet",
+      "delivery_state": "verified",
+      "acceptance_status": "passed",
+      "user_observation": "用户于 2026-07-30 确认新版悬停坐姿、左右拖动行走与松开回坐姿验收通过。",
+      "user_feedback": [
+        "当前动画的还原度一般",
+        "待复习坐姿招手状态眼睛完全不眨，视觉显假",
+        "图片拖放状态复用坐姿摇头，动作语义和重心不自然、显呆板"
+      ],
+      "feedback_interpretation": "眨眼缺失与拖放状态复用坐姿摇头是当前暴露核心原则的例子，不是对动作类型或修复范围的穷尽性限定。",
+      "acceptance_requirements": [
+        "对所有可见状态进行真实运行时的自然度与连续性视觉检查",
+        "所有状态避免冻结表情、机械循环和生硬的静态图片切换",
+        "每个状态的动作、重心与微表情必须符合该状态的功能语义",
+        "鼠标未悬停时继续站立踢球",
+        "鼠标悬停且静止时保持坐姿歪头并有自然微动作",
+        "向左和向右拖动桌宠时分别播放方向正确的连续行走动画",
+        "松开鼠标后平滑回到坐姿歪头"
+      ],
+      "trigger_or_verification": "用户确认新版预览后已接入运行版。真实桌宠窗口完成向左和向右拖动并在松开后回到坐姿歪头；移出后恢复站立踢球。编译、自检、签名、透明拖放解析与中文气泡回归均通过。",
+      "preview_evidence": [
+        "artifacts/release-gate/pet-interaction/hover-sit-preview.gif",
+        "artifacts/release-gate/pet-interaction/drag-left-preview.gif",
+        "artifacts/release-gate/pet-interaction/drag-right-preview.gif",
+        "artifacts/release-gate/pet-interaction/preview-contact-sheet.png",
+        "artifacts/release-gate/pet-interaction/preview-qa.json",
+        "artifacts/release-gate/pet-interaction/interaction-state-sequence.json",
+        "artifacts/release-gate/pet-interaction/regression.json",
+        "artifacts/release-gate/pet-interaction/runtime-idle.png",
+        "artifacts/release-gate/pet-interaction/runtime-after-drag-left.png",
+        "artifacts/release-gate/pet-interaction/runtime-after-drag-right.png"
+      ],
+      "next_action": "将当前交互与拖放能力作为稳定基线；后续动画细节优化必须单独建迭代并通过真实运行视觉验收。",
+      "needs_user_confirmation": false,
+      "contract_ids": [
+        "pet-hover-sit-head-tilt",
+        "pet-directional-drag-walk",
+        "pet-interaction-transition",
+        "pet-interaction-regression"
+      ]
+    },
+    {
+      "id": "PET-03",
+      "topic": "桌宠默认待机",
+      "summary": "默认待机改为大王日常最常见的侧卧趴姿，替代站立踢球；动画以真实照片为身份和体态基准，表现克制呼吸、自然眨眼与轻微尾尖动作。",
+      "route": "awaiting_user_acceptance",
+      "owner": "desktop-pet",
+      "delivery_state": "verified_real_runtime_pending_final_user_acceptance",
+      "acceptance_status": "preview_passed_runtime_pending",
+      "user_observation": "用户提供 IMG_7744、IMG_9498、IMG_5127 作为大王日常侧卧趴姿参考，并明确要求替代站立踢球成为待机动作。",
+      "identity_master_acceptance": {
+        "status": "passed",
+        "confirmed_at": "2026-07-30",
+        "user_feedback": "这个更像",
+        "asset_source": "/Users/rene/.codex/generated_images/019f91f8-eb2d-7d83-bf29-ae1efaa4c7e8/call_9DjEax21hs1u35VVAreuWFBz.png"
+      },
+      "animation_preview_acceptance": {
+        "status": "passed",
+        "confirmed_at": "2026-07-30",
+        "user_feedback": "确认"
+      },
+      "acceptance_requirements": [
+        "大王的脸型、眼型、银灰虎斑、体型与真实照片一致",
+        "保留既有黑色礼服造型与透明背景",
+        "待机为自然侧卧趴姿，不再显示站立踢球",
+        "循环包含克制呼吸、非机械眨眼和轻微尾尖动作",
+        "小尺寸桌面显示清晰，不出现背景残边、身体漂移或静态照片切换感",
+        "不得破坏悬停坐姿、左右拖动行走、透明窗口和图片拖放识词"
+      ],
+      "trigger_or_verification": "首版预览因人工眼睑与整图缩放被内部退回；重做后为48帧局部分层动画。2026-07-30 已接入真实运行版，并按实机反馈将侧卧待机单独放大到230px显示宽度，悬停/行走维持原186px。构建、签名、自检、真实待机及窗口拖动回归通过。",
+      "preview_evidence": [
+        "artifacts/release-gate/pet-reclining-idle/reclining-idle-preview.gif",
+        "artifacts/release-gate/pet-reclining-idle/reclining-idle-preview-small.gif",
+        "artifacts/release-gate/pet-reclining-idle/reclining-idle-contact-sheet.png",
+        "artifacts/release-gate/pet-reclining-idle/preview-qa.json"
+      ],
+      "next_action": "请用户查看当前运行中的放大侧卧待机，确认实际尺寸、还原度与循环观感；通过后关闭本迭代。",
+      "needs_user_confirmation": true,
+      "contract_ids": [
+        "pet-reclining-idle-preview",
+        "pet-reclining-idle-runtime",
+        "pet-reclining-idle-regression"
+      ]
+    },
+    {
+      "id": "PET-04",
+      "topic": "桌宠鼠标悬停坐姿",
+      "summary": "鼠标持续悬停时保持坐姿，并在同一个连续动画中不规则转头、回正、停顿和眨眼；不能每次悬停只播放一个固定方向动作。",
+      "route": "current_iteration",
+      "owner": "desktop-pet",
+      "delivery_state": "reworked_verified_real_runtime_pending_user_acceptance",
+      "acceptance_status": "awaiting_user_acceptance",
+      "user_observation": "用户实机反馈：每次悬停仍是一个固定动作。真实需求是一次持续悬停内头部不规则转动，而不是进入悬停时随机选择固定方向。",
+      "acceptance_requirements": [
+        "一次持续悬停内，头部在同一连续动画中不规则左转、右转、回正并短暂停顿",
+        "不得在进入悬停时只选择左歪头或右歪头固定循环",
+        "坐姿循环包含自然眨眼、克制呼吸和轻微耳朵反应",
+        "大王身份、银灰虎斑、黑色礼服和小尺寸清晰度保持一致",
+        "鼠标离开恢复侧卧待机，左右拖动仍进入方向行走",
+        "不得破坏透明窗口、图片拖放识词和中文气泡"
+      ],
+      "trigger_or_verification": "生成并检查单一连续悬停预览；量化头部方向随时间至少跨越左、回正、右三个区间，且节奏不等间隔，再接入真实运行版。",
+      "next_action": "请用户在当前正常运行版将鼠标持续停在大王身上，确认同一次悬停内头部不规则左转、右转、回正和停顿的观感。",
+      "needs_user_confirmation": true,
+      "contract_ids": [
+        "pet-hover-natural-motion",
+        "pet-hover-continuous-head-motion",
+        "pet-hover-regression"
+      ]
+    },
+    {
+      "id": "PET-05",
+      "topic": "待机与悬停耳尾微动作",
+      "summary": "卧姿待机和坐姿悬停均增加自然、克制且不同步的耳朵与尾巴微动作；悬停转动必须由头颈肩连续区域共同完成。",
+      "route": "current_iteration",
+      "owner": "desktop-pet",
+      "delivery_state": "verified_real_runtime_pending_user_acceptance",
+      "acceptance_status": "awaiting_user_acceptance",
+      "user_observation": "用户要求待机和悬停均增加耳尾微动，并指出头部图片与身体分离、只晃头部不符合猫的行动。",
+      "acceptance_requirements": [
+        "卧姿待机左右耳不同步轻微转动，尾尖有克制摆动",
+        "坐姿悬停耳动、盘尾微摆与转头、眨眼、呼吸节奏错开",
+        "悬停转动必须连带颈部、肩部和上胸自然改变重心，不得单独旋转裁出的头部",
+        "松弛尾巴必须固定尾根、由尾尖缓慢往返并在极值短暂停顿，不得像钟摆或整段同步平移",
+        "不得通过整张图片平移或缩放伪装耳尾动作",
+        "不得改变卧姿待机、连续转头悬停及大王身份",
+        "透明窗口、左右行走、图片拖放和中文气泡不得回归"
+      ],
+      "trigger_or_verification": "分别生成待机与悬停预览，量化耳部和尾部局部变化范围，再接入运行版完成透明与交互回归。",
+      "next_action": "请用户观察正常运行版的待机与持续悬停，确认头颈肩联动、耳朵异步微动和尾尖慢速松弛摆动的主观观感。",
+      "needs_user_confirmation": true,
+      "known_limit": "自动化真实运行取样与去重影复验已通过；仍需用户对动作自然度作最终主观验收。",
+      "contract_ids": [
+        "pet-idle-ear-tail-motion",
+        "pet-hover-ear-tail-motion",
+        "pet-micro-motion-regression"
+      ]
+    },
+    {
+      "id": "PET-06",
+      "topic": "真实照片身份与猫科自然动作融合",
+      "summary": "以大王多角度真实照片为身份基准，主动补充猫科视线、耳朵、头颈肩、呼吸、承重和尾巴动力学，制作侧卧待机与坐姿悬停两个2.5D高保真预览。",
+      "route": "already_verified",
+      "owner": "desktop-pet+user",
+      "delivery_state": "preview_user_accepted_pending_runtime_integration",
+      "acceptance_status": "passed",
+      "user_observation": "用户要求Codex先优化到自审通过再交付。v1/v2预览因动作过弱、关键帧换脸和光流双脸残影被Codex主动拒绝；v3改为同一高还原母版连续骨架形变，并通过Codex桌面、390px、透明、小尺寸、眨眼、头颈肩联动和循环接缝自审。用户于2026-07-30明确澄清“验收通过”。",
+      "acceptance_requirements": [
+        "大王脸型、眼型、耳距、银灰毛纹、体型和黑色礼服在两个状态中保持同一身份",
+        "视线先于耳朵，耳朵先于头颈肩完成方向响应，不得单独摇头",
+        "呼吸集中在胸腔与腹侧，身体接触面和承重前爪保持稳定",
+        "眨眼、耳动、呼吸与尾巴节奏不机械同步",
+        "尾根稳定、尾尖逐节滞后并在极点短暂停顿",
+        "动作有准备、执行和自然回落，不得突然切帧、换脸或产生橡皮形变",
+        "透明背景和桌宠小尺寸下仍清晰、自然且有生命感",
+        "用户验收预览前不得替换当前运行版"
+      ],
+      "trigger_or_verification": "逐帧 Canvas 页面在真实浏览器持续播放，桌面与390px下动作可见、透明边缘稳定、无空白帧或控制台错误；用户已完成视觉验收。",
+      "next_action": "预览验收已关闭；运行版接入属于下一实施阶段，需另行确认范围，并重新验证透明窗口、拖放识词、状态切换和小尺寸连续播放。",
+      "needs_user_confirmation": false,
+      "known_limit": "v3是高保真单母版的2.5D连续形变，不是逐根毛发或三维骨骼模拟；已避免换脸、双影和头身分离。用户已通过预览验收，但运行版尚未替换。",
+      "evidence": [
+        "artifacts/pet-natural-motion-v1/masters/reclining-master.png",
+        "artifacts/pet-natural-motion-v1/masters/hover-master.png",
+        "artifacts/release-gate/pet-natural-motion-v3/reclining-preview-v3.gif",
+        "artifacts/release-gate/pet-natural-motion-v3/reclining-preview-v3.apng",
+        "artifacts/release-gate/pet-natural-motion-v3/hover-preview-v3.gif",
+        "artifacts/release-gate/pet-natural-motion-v3/hover-preview-v3.apng",
+        "artifacts/release-gate/pet-natural-motion-v3/preview.html",
+        "artifacts/release-gate/pet-natural-motion-v3/preview-contact-sheet-v3.png",
+        "artifacts/release-gate/pet-natural-motion-v3/preview-qa-v3.json",
+        "artifacts/release-gate/pet-natural-motion-v3/browser-playback-qa-v3.json",
+        "artifacts/release-gate/pet-natural-motion-v3/browser-playback-desktop-t1.png",
+        "artifacts/release-gate/pet-natural-motion-v3/browser-playback-desktop-t2.png",
+        "artifacts/release-gate/pet-natural-motion-v3/browser-playback-narrow-t1.png",
+        "artifacts/release-gate/pet-natural-motion-v3/browser-playback-narrow-t2.png",
+        "scripts/verify-pet-natural-motion-v3-preview.sh"
+      ],
+      "contract_ids": [
+        "pet-natural-identity-master",
+        "pet-natural-reclining-preview",
+        "pet-natural-hover-preview",
+        "pet-natural-motion-preview-qa",
+        "single-master-reclining-motion",
+        "single-master-hover-motion",
+        "natural-motion-v3-preview-qa"
+      ]
+    },
+    {
+      "id": "PET-07",
+      "topic": "v3 自然动作运行版接入",
+      "summary": "将用户已验收的 v3 侧卧待机和坐姿悬停动画接入 macOS 桌宠运行版，仅替换这两个状态，并保护透明窗口、拖放识词、左右行走、中文气泡和学习状态。",
+      "route": "awaiting_user_acceptance",
+      "owner": "desktop-pet",
+      "delivery_state": "verified_on_real_path_awaiting_user_acceptance",
+      "acceptance_status": "runtime_pending_user_acceptance",
+      "trigger_or_verification": "构建并签名真实 .app；自检通过；运行版待机和悬停截图与资产哈希匹配；透明窗口、手动拖动、左右行走与 PNG 拖放解析回归通过。",
+      "next_action": "请用户在正常使用中确认鼠标进入时出现新坐姿悬停；无待复习状态时确认新侧卧待机。通过后关闭运行版接入迭代。",
+      "needs_user_confirmation": true,
+      "known_limit": "本轮只接入已验收的待机与悬停，其他状态动画保持原样。",
+      "evidence": [
+        "artifacts/release-gate/pet-natural-motion-v3-runtime/runtime-assets-qa.json",
+        "artifacts/release-gate/pet-natural-motion-v3-runtime/runtime-timing-qa.json",
+        "artifacts/release-gate/pet-natural-motion-v3-runtime/runtime-regression.json",
+        "artifacts/release-gate/pet-natural-motion-v3-runtime/runtime-idle.png",
+        "artifacts/release-gate/pet-natural-motion-v3-runtime/runtime-hover.png",
+        "artifacts/release-gate/pet-natural-motion-v3-runtime/runtime-real-hover.png",
+        "scripts/verify-pet-natural-motion-v3-runtime.sh"
+      ],
+      "contract_ids": [
+        "pet-natural-v3-runtime-assets",
+        "pet-natural-v3-runtime-timing",
+        "pet-natural-v3-runtime-regression"
+      ]
+    },
+    {
+      "id": "REM-01",
+      "topic": "每日提醒",
+      "summary": "当天计划未完成时 20:00 仅提醒一次；其余时间桌宠保持待复习状态，不持续弹窗或自动出声；完成后停止提醒。",
+      "route": "already_verified",
+      "owner": "desktop-pet+server",
+      "delivery_state": "verified",
+      "acceptance_status": "passed",
+      "user_observation": "用户于 2026-07-29 确认“每日提醒OK”。",
+      "trigger_or_verification": "用户已确认每日提醒真实可用；后续改动不得破坏 20:00 单次提醒与完成后停止提醒。",
+      "contract_ids": []
+    },
+    {
+      "id": "REM-02",
+      "topic": "iCloud 提醒授权",
+      "summary": "仅用户主动开启时申请 Reminders 与 Mac 通知权限；只维护一条 iCloud 提醒，拒绝授权时清楚降级为 Mac 本地提醒。",
+      "route": "awaiting_user_acceptance",
+      "owner": "desktop-pet+user",
+      "delivery_state": "implemented_user_acceptance_failed",
+      "acceptance_status": "failed",
+      "user_observation": "此前 20:00 提醒未通过；用户于 2026-07-29 已确认“每日提醒OK”，但尚未单独确认 iPhone iCloud 同步与零重复事项。",
+      "known_limit": "Mac 每日提醒已获用户验收；iPhone iCloud 同步和单一事项去重仍缺少单独实机证据。",
+      "trigger_or_verification": "修复前需只读诊断运行中的桌宠版本、提醒开关持久化、EventKit/TCC 权限、可写 iCloud 列表选择和系统通知调度；修复后必须实机确认 Mac 20:00 通知、iPhone 同步和零重复事项。",
+      "next_action": "稳定版本收口后单独诊断提醒链路；诊断阶段不得创建或删除真实提醒，也不得擅自触发系统权限。",
+      "needs_user_confirmation": true,
+      "code_evidence": [
+        "desktop-dropper/DailyReviewReminder.swift",
+        "desktop-dropper/CodexPet-Info.plist"
+      ],
+      "contract_ids": []
+    },
+    {
+      "id": "UI-01",
+      "topic": "任务轨道布局",
+      "summary": "桌面查词与测试采用主操作区加固定右侧任务轨道；窄屏采用固定底部任务条与按需展开面板。",
+      "route": "awaiting_user_acceptance",
+      "owner": "web+user",
+      "delivery_state": "implemented_real_path_checkpoint",
+      "acceptance_status": "preview_pending_user_acceptance",
+      "needs_user_confirmation": true,
+      "trigger_or_verification": "用户确认桌面与 390/400px 截图中的任务轨道层级、密度和移动底栏体验后再进入精修。",
+      "evidence": [
+        "artifacts/release-gate/task-rail-checkpoint/desktop-lookup-1440.png",
+        "artifacts/release-gate/task-rail-checkpoint/desktop-quiz-1440.png",
+        "artifacts/release-gate/task-rail-checkpoint/mobile-lookup-390.png",
+        "artifacts/release-gate/task-rail-checkpoint/mobile-quiz-400.png",
+        "artifacts/release-gate/task-rail-checkpoint/metrics.json"
+      ],
+      "contract_ids": []
+    },
+    {
+      "id": "PMO-01",
+      "topic": "项目交付治理",
+      "summary": "每一次任务执行必须严格遵循 PMO skill 的现有规则；若范围、产品规则、数据含义、风险、验收条件或权限边界不清晰，必须先向用户确认，不得自行推断后执行。",
+      "route": "already_verified",
+      "owner": "PMO+Codex",
+      "delivery_state": "governance_active",
+      "acceptance_status": "user_confirmed",
+      "user_observation": "用户于 2026-07-29 明确要求：每一次任务执行严格按照 PMO skill；规则不清晰时先向用户确认。",
+      "trigger_or_verification": "每次实施前执行 scope、do-not-break、风险、真实路径验收与两小时门禁检查；任何不清晰且会改变产品或数据结果的事项必须先取得用户确认。交付前运行 coverage audit 与对应 release gate，并区分 verified、awaiting user verification 和 deferred。",
+      "evidence": [
+        "/Users/rene/.codex/skills/pmo-skill/SKILL.md",
+        "config/delivery/master-decision-ledger.json"
+      ],
+      "contract_ids": []
+    },
+    {
+      "id": "CALIB-01",
+      "topic": "7 天后校准",
+      "summary": "先积累约 7 天真实答题耗时、完成率和新增速度；系统只提出额度调整建议，必须用户确认后生效。",
+      "route": "future_milestone",
+      "owner": "server+PMO+user",
+      "delivery_state": "not_implemented",
+      "trigger_or_verification": "至少 7 个有效学习日数据齐备后生成建议，不自动修改 20/10 配额。",
+      "contract_ids": []
+    }
+  ],
+  "needs_user_confirmation": [
+    {
+      "decision_id": "PET-03",
+      "question": "请查看当前运行中的放大侧卧待机，确认实际尺寸、还原度与循环观感；通过后关闭本迭代。"
+    },
+    {
+      "decision_id": "UI-01",
+      "question": "请确认右侧任务轨道与移动底栏的当前视觉方向；确认后再进行最终精修与交付门禁。"
+    },
+    {
+      "decision_id": "FOCUS-03",
+      "question": "当前真实词库重点词为0；下次出现重点词时，请完成一次中途离开再返回，确认本轮进度不会回到0，并确认下一独立轮次才推进第二次巩固。"
+    },
+    {
+      "decision_id": "LOOKUP-01",
+      "question": "请在 chrome://extensions 重新加载 unpacked extension 后，确认普通网页与 Chrome 内置 PDF 的选中文字右键菜单均只显示一个“查词”动作，并可一次点击直达既有查询结果。"
+    },
+    {
+      "decision_id": "REM-02",
+      "question": "每日 20:00 提醒已获用户确认；REM-02 仍待单独确认 iPhone iCloud 同步和零重复事项。"
+    },
+    {
+      "decision_id": "PET-07",
+      "question": "请在正常使用中确认鼠标进入大王时显示已验收的 v3 坐姿悬停；无待复习状态时显示 v3 侧卧待机。"
+    }
+  ]
+}

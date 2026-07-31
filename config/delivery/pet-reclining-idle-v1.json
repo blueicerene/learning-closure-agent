@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "iteration": "pet-reclining-idle-v1",
+  "core_goal": "以大王真实日常侧卧趴姿替代站立踢球待机，呈现自然、克制且连续的生命感。",
+  "contract_owner": "PMO",
+  "status": "ready",
+  "in_scope": [
+    "pet-reclining-idle-preview",
+    "pet-reclining-idle-runtime",
+    "pet-reclining-idle-regression"
+  ],
+  "out_of_scope": [
+    "重做悬停坐姿、左右拖动行走或学习状态动画",
+    "修改查词、测试、词库、日历或提醒逻辑",
+    "改变大王身份、银灰虎斑、体型或黑色礼服",
+    "用户确认预览前替换运行中的桌宠"
+  ],
+  "do_not_break": [
+    "桌宠窗口保持透明、无方框、始终可见且可手动拖动",
+    "鼠标悬停仍显示已验收的坐姿歪头",
+    "向左和向右拖动仍显示已验收的方向行走",
+    "图片拖入仍进入现有 OCR 与查词流程",
+    "中文气泡和学习状态逻辑保持可用"
+  ],
+  "decisions": [
+    {
+      "id": "pet-reclining-idle-preview",
+      "summary": "基于 IMG_7744、IMG_9498、IMG_5127 制作侧卧趴姿透明待机预览，包含呼吸、自然眨眼与轻微尾尖动作。",
+      "state": "confirmed",
+      "priority": "core",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "required_evidence": [
+        "artifacts/release-gate/pet-reclining-idle/reclining-idle-preview.gif",
+        "artifacts/release-gate/pet-reclining-idle/reclining-idle-preview-small.gif",
+        "artifacts/release-gate/pet-reclining-idle/reclining-idle-contact-sheet.png",
+        "artifacts/release-gate/pet-reclining-idle/preview-qa.json"
+      ],
+      "evidence": [
+        "artifacts/release-gate/pet-reclining-idle/reclining-idle-preview.gif",
+        "artifacts/release-gate/pet-reclining-idle/reclining-idle-preview-small.gif",
+        "artifacts/release-gate/pet-reclining-idle/reclining-idle-contact-sheet.png",
+        "artifacts/release-gate/pet-reclining-idle/preview-qa.json"
+      ],
+      "verification_commands": [
+        "scripts/verify-pet-reclining-idle.sh"
+      ]
+    },
+    {
+      "id": "pet-reclining-idle-runtime",
+      "summary": "用户确认预览后，以侧卧趴姿替换默认站立踢球待机。",
+      "state": "confirmed",
+      "priority": "core",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "required_evidence": [
+        "artifacts/release-gate/pet-reclining-idle/runtime-idle.png"
+      ],
+      "evidence": [
+        "artifacts/release-gate/pet-reclining-idle/runtime-idle.png"
+      ],
+      "verification_commands": [
+        "scripts/verify-pet-reclining-idle.sh"
+      ]
+    },
+    {
+      "id": "pet-reclining-idle-regression",
+      "summary": "待机替换不得破坏透明窗口、悬停坐姿、左右拖动行走、图片拖放识词与中文气泡。",
+      "state": "confirmed",
+      "priority": "core",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "required_evidence": [
+        "artifacts/release-gate/pet-reclining-idle/regression.json"
+      ],
+      "evidence": [
+        "artifacts/release-gate/pet-reclining-idle/regression.json"
+      ],
+      "verification_commands": [
+        "scripts/verify-pet-reclining-idle.sh"
+      ]
+    }
+  ],
+  "real_path_checks": [
+    {
+      "id": "pet-reclining-idle-preview-check",
+      "status": "passed",
+      "verification_commands": [
+        "scripts/verify-pet-reclining-idle.sh"
+      ],
+      "required_evidence": [
+        "artifacts/release-gate/pet-reclining-idle/reclining-idle-preview.gif",
+        "artifacts/release-gate/pet-reclining-idle/reclining-idle-preview-small.gif",
+        "artifacts/release-gate/pet-reclining-idle/reclining-idle-contact-sheet.png",
+        "artifacts/release-gate/pet-reclining-idle/preview-qa.json"
+      ],
+      "evidence": [
+        "artifacts/release-gate/pet-reclining-idle/reclining-idle-preview.gif",
+        "artifacts/release-gate/pet-reclining-idle/reclining-idle-preview-small.gif",
+        "artifacts/release-gate/pet-reclining-idle/reclining-idle-contact-sheet.png",
+        "artifacts/release-gate/pet-reclining-idle/preview-qa.json"
+      ]
+    },
+    {
+      "id": "pet-reclining-idle-runtime-check",
+      "status": "passed",
+      "verification_commands": [
+        "scripts/verify-pet-reclining-idle.sh"
+      ],
+      "required_evidence": [
+        "artifacts/release-gate/pet-reclining-idle/runtime-idle.png",
+        "artifacts/release-gate/pet-reclining-idle/runtime-after-drag.png",
+        "artifacts/release-gate/pet-reclining-idle/regression.json"
+      ],
+      "evidence": [
+        "artifacts/release-gate/pet-reclining-idle/runtime-idle.png",
+        "artifacts/release-gate/pet-reclining-idle/runtime-after-drag.png",
+        "artifacts/release-gate/pet-reclining-idle/regression.json"
+      ]
+    }
+  ]
+}

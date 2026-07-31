@@ -1,0 +1,200 @@
+{
+  "schema_version": 1,
+  "iteration": "daily-plan-v1",
+  "core_goal": "每日计划是可完成的冻结任务，不把全部词库或积压当成当天债务。",
+  "contract_owner": "PMO",
+  "status": "ready",
+  "in_scope": [
+    "plan-total-at-most-20",
+    "new-items-at-most-10",
+    "separate-review-and-pending-pools",
+    "frozen-plan-does-not-expand",
+    "review-returns-frozen-plan-only",
+    "two-am-learning-day-cutoff",
+    "migrate-today-preserving-four-completions",
+    "home-and-quiz-share-plan-counts",
+    "calendar-completion-markers"
+  ],
+  "decisions": [
+    {
+      "id": "plan-total-at-most-20",
+      "summary": "首个校准期内，每日冻结计划最多 20 道题。",
+      "priority": "core",
+      "state": "confirmed",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "evidence": [
+        "artifacts/release-gate/daily-plan/plan-total-at-most-20.json",
+        "artifacts/release-gate/daily-plan/real-store-bounded-plan.json"
+      ],
+      "required_evidence": ["artifacts/release-gate/daily-plan/plan-total-at-most-20.json"],
+      "verification_commands": ["/opt/homebrew/bin/npm --workspace server run test:daily-plan-release -- --case plan-total-at-most-20"]
+    },
+    {
+      "id": "new-items-at-most-10",
+      "summary": "每日计划最多释放 10 个待进入计划词；到期复习达到容量时不释放新词。",
+      "priority": "core",
+      "state": "confirmed",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "evidence": [
+        "artifacts/release-gate/daily-plan/new-items-at-most-10.json",
+        "artifacts/release-gate/daily-plan/real-store-bounded-plan.json"
+      ],
+      "required_evidence": ["artifacts/release-gate/daily-plan/new-items-at-most-10.json"],
+      "verification_commands": ["/opt/homebrew/bin/npm --workspace server run test:daily-plan-release -- --case new-items-at-most-10"]
+    },
+    {
+      "id": "separate-review-and-pending-pools",
+      "summary": "已学习到期复习与待进入计划词分池；到期复习优先，待学习池不显示为今日债务。",
+      "priority": "core",
+      "state": "confirmed",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "evidence": [
+        "artifacts/release-gate/daily-plan/separate-review-and-pending-pools.json",
+        "artifacts/release-gate/daily-plan/real-store-bounded-plan.json"
+      ],
+      "required_evidence": ["artifacts/release-gate/daily-plan/separate-review-and-pending-pools.json"],
+      "verification_commands": ["/opt/homebrew/bin/npm --workspace server run test:daily-plan-release -- --case separate-review-and-pending-pools"]
+    },
+    {
+      "id": "frozen-plan-does-not-expand",
+      "summary": "当天计划开始后冻结；后续新查词只进入待学习池，不扩张当天计划。",
+      "priority": "core",
+      "state": "confirmed",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "evidence": [
+        "artifacts/release-gate/daily-plan/frozen-plan-does-not-expand.json",
+        "artifacts/release-gate/daily-plan/real-store-bounded-plan.json"
+      ],
+      "required_evidence": ["artifacts/release-gate/daily-plan/frozen-plan-does-not-expand.json"],
+      "verification_commands": ["/opt/homebrew/bin/npm --workspace server run test:daily-plan-release -- --case frozen-plan-does-not-expand"]
+    },
+    {
+      "id": "review-returns-frozen-plan-only",
+      "summary": "今日测试接口只返回冻结计划中的未作答题，不重新返回全部到期词。",
+      "priority": "core",
+      "state": "confirmed",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "evidence": [
+        "artifacts/release-gate/daily-plan/review-returns-frozen-plan-only.json",
+        "artifacts/release-gate/daily-plan/real-store-bounded-plan.json"
+      ],
+      "required_evidence": ["artifacts/release-gate/daily-plan/review-returns-frozen-plan-only.json"],
+      "verification_commands": ["/opt/homebrew/bin/npm --workspace server run test:daily-plan-release -- --case review-returns-frozen-plan-only"]
+    },
+    {
+      "id": "two-am-learning-day-cutoff",
+      "summary": "每日计划使用 America/Toronto 学习日；次日 00:00–01:59 的作答仍计入前一天，02:00 才生成新计划。",
+      "priority": "core",
+      "state": "confirmed",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "evidence": [
+        "artifacts/release-gate/daily-plan/two-am-learning-day-cutoff.json",
+        "artifacts/release-gate/daily-plan/midnight-cutoff-repair.json"
+      ],
+      "required_evidence": [
+        "artifacts/release-gate/daily-plan/two-am-learning-day-cutoff.json",
+        "artifacts/release-gate/daily-plan/midnight-cutoff-repair.json"
+      ],
+      "verification_commands": [
+        "/opt/homebrew/bin/npm --workspace server run test:daily-plan-release -- --case two-am-learning-day-cutoff"
+      ]
+    },
+    {
+      "id": "migrate-today-preserving-four-completions",
+      "summary": "把 2026-07-26 的旧 142 题计划安全迁移为不超过 20 题，并保留已经完成的 4 题，不改词条学习历史。",
+      "priority": "core",
+      "state": "confirmed",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "evidence": [
+        "artifacts/release-gate/daily-plan/migrate-today-preserving-four-completions.json",
+        "artifacts/release-gate/daily-plan/migration-history-integrity.json"
+      ],
+      "required_evidence": [
+        "artifacts/release-gate/daily-plan/migrate-today-preserving-four-completions.json",
+        "artifacts/release-gate/daily-plan/migration-history-integrity.json"
+      ],
+      "verification_commands": ["python3 scripts/verify_daily_plan_runtime.py --case migrate-today-preserving-four-completions"]
+    },
+    {
+      "id": "home-and-quiz-share-plan-counts",
+      "summary": "首页、学习状态接口和测试页使用同一冻结计划总数、已完成数与剩余题数。",
+      "priority": "core",
+      "state": "confirmed",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "evidence": [
+        "artifacts/release-gate/daily-plan/home-and-quiz-share-plan-counts.json",
+        "artifacts/release-gate/daily-plan/home-and-quiz-share-plan-counts.png"
+      ],
+      "required_evidence": [
+        "artifacts/release-gate/daily-plan/home-and-quiz-share-plan-counts.json",
+        "artifacts/release-gate/daily-plan/home-and-quiz-share-plan-counts.png"
+      ],
+      "verification_commands": [
+        "python3 scripts/verify_daily_plan_runtime.py --case home-and-quiz-share-plan-counts",
+        "/opt/homebrew/bin/npm --workspace web run test:quiz-plan-progress"
+      ]
+    },
+    {
+      "id": "calendar-completion-markers",
+      "summary": "首页显示最近 7 天并可展开整月；完整完成日使用用户指定 IMG_0038 的大王真实正面头部裁切，今天及过去所有未完整完成日使用用户确认的大王背影标记，未来日期留白；不使用生成全身动画及线条、空心、黑白化方案。",
+      "priority": "core",
+      "state": "confirmed",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "evidence": [
+        "artifacts/release-gate/daily-plan/calendar-completion-markers.json",
+        "artifacts/release-gate/daily-plan/calendar-completion-markers.png",
+        "artifacts/release-gate/daily-plan/calendar-real-7day-400px.png",
+        "artifacts/release-gate/daily-plan/calendar-month-markers-400px.png",
+        "artifacts/release-gate/daily-plan/calendar-final-answer-refresh.json",
+        "artifacts/release-gate/daily-plan/calendar-final-answer-front-real.png",
+        "artifacts/release-gate/daily-plan/calendar-final-answer-front-month-real.png"
+      ],
+      "required_evidence": [
+        "artifacts/release-gate/daily-plan/calendar-completion-markers.json",
+        "artifacts/release-gate/daily-plan/calendar-completion-markers.png"
+      ],
+      "verification_commands": ["/opt/homebrew/bin/npm --workspace web run test:daily-plan-release"]
+    }
+  ],
+  "real_path_checks": [
+    {
+      "id": "real-store-bounded-plan",
+      "summary": "使用当前真实词库的只读副本生成计划，验证总题数、新词上限、分池、冻结读取和源文件完整性；证据同时记录相对早先 159 词基线的数据增长。",
+      "status": "passed",
+      "evidence": ["artifacts/release-gate/daily-plan/real-store-bounded-plan.json"],
+      "required_evidence": ["artifacts/release-gate/daily-plan/real-store-bounded-plan.json"],
+      "verification_commands": ["/opt/homebrew/bin/npm --workspace server run test:daily-plan-real-path -- --fixture output/legal-vocab.json --read-only-copy"]
+    },
+    {
+      "id": "resume-frozen-plan",
+      "summary": "开始计划后保存新词并中途返回，仍从原冻结计划下一道未作答题继续；客户端误传 UTC 次日日期也不得绕过冻结计划。",
+      "status": "passed",
+      "evidence": ["artifacts/release-gate/daily-plan/resume-frozen-plan.json"],
+      "required_evidence": ["artifacts/release-gate/daily-plan/resume-frozen-plan.json"],
+      "verification_commands": ["/opt/homebrew/bin/npm --workspace server run test:daily-plan-real-path -- --case resume-frozen-plan"]
+    },
+    {
+      "id": "migrated-today-ui",
+      "summary": "迁移后保留今天 4 个已完成任务，首页与测试页显示相同的不超过 20 题计划。",
+      "status": "passed",
+      "evidence": [
+        "artifacts/release-gate/daily-plan/migrated-today-ui.json",
+        "artifacts/release-gate/daily-plan/migrated-today-ui.png"
+      ],
+      "required_evidence": [
+        "artifacts/release-gate/daily-plan/migrated-today-ui.json",
+        "artifacts/release-gate/daily-plan/migrated-today-ui.png"
+      ],
+      "verification_commands": ["python3 scripts/verify_daily_plan_runtime.py --case home-and-quiz-share-plan-counts --evidence artifacts/release-gate/daily-plan/home-and-quiz-share-plan-counts.json"]
+    }
+  ]
+}
