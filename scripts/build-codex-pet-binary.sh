@@ -3,6 +3,7 @@ set -e
 
 PROJECT_DIR="/Users/rene/Documents/学习助手"
 SOURCE="$PROJECT_DIR/desktop-dropper/LegalVocabDropper.swift"
+REMINDER_SOURCE="$PROJECT_DIR/desktop-dropper/DailyReviewReminder.swift"
 INFO_PLIST="$PROJECT_DIR/desktop-dropper/CodexPet-Info.plist"
 RUNTIME_DIR="$PROJECT_DIR/.runtime-bin"
 APP_PATH="$RUNTIME_DIR/Codex Pet 大王.app"
@@ -24,7 +25,11 @@ fi
 /usr/bin/swiftc \
   -sdk "$SDK_PATH" \
   -module-cache-path "$MODULE_CACHE" \
+  -parse-as-library \
   "$SOURCE" \
+  "$REMINDER_SOURCE" \
+  -framework EventKit \
+  -framework UserNotifications \
   -o "$OUTPUT"
 
 cp "$INFO_PLIST" "$CONTENTS_DIR/Info.plist"

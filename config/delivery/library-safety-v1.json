@@ -1,0 +1,176 @@
+{
+  "schema_version": 1,
+  "iteration": "library-safety-v1",
+  "core_goal": "让词库中的质量状态、出题资格、删除、日期和界面表达保持一致，避免低质量词条或危险操作破坏学习流程。",
+  "contract_owner": "PMO",
+  "status": "ready",
+  "in_scope": [
+    "quality-eligibility-single-source",
+    "quality-actions-consistent",
+    "safe-library-retirement",
+    "sentence-fragment-quality-guard",
+    "learning-day-library-date",
+    "library-responsive-layout",
+    "library-filter-language"
+  ],
+  "out_of_scope": [
+    "批量重写214个真实词条的释义",
+    "改变答题历史、复习间隔或冻结计划内容",
+    "修改查词、今日测试、每日提醒或桌宠流程",
+    "调整mastered算法",
+    "待确认词重新查询失败后的自动纠错闭环（已记录为后续里程碑 LIB-07）"
+  ],
+  "do_not_break": [
+    "查词继续返回中英文释义、法律语境和发音并自动保存",
+    "今日测试继续只消费冻结计划",
+    "每日20:00提醒保持用户已验收状态",
+    "真实output/legal-vocab.json在第一检查点保持字节不变"
+  ],
+  "decisions": [
+    {
+      "id": "quality-eligibility-single-source",
+      "summary": "所有待确认词统一暂停出题和干扰项资格。",
+      "state": "confirmed",
+      "priority": "core",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "required_evidence": [
+        "artifacts/release-gate/library-safety/quality-eligibility.json"
+      ],
+      "evidence": [
+        "artifacts/release-gate/library-safety/quality-eligibility.json"
+      ],
+      "verification_commands": [
+        "node --import tsx server/src/tests/librarySafetyFixture.ts",
+        "node --import tsx server/src/tests/librarySafetyCheckpoint.ts"
+      ]
+    },
+    {
+      "id": "quality-actions-consistent",
+      "summary": "确认、重新查询和编辑使用同一质量状态转换。",
+      "state": "confirmed",
+      "priority": "core",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "required_evidence": [
+        "artifacts/release-gate/library-safety/quality-actions.json"
+      ],
+      "evidence": [
+        "artifacts/release-gate/library-safety/quality-actions.json"
+      ],
+      "verification_commands": [
+        "node --import tsx server/src/tests/librarySafetyFixture.ts",
+        "node --import tsx server/src/tests/librarySafetyCheckpoint.ts"
+      ]
+    },
+    {
+      "id": "safe-library-retirement",
+      "summary": "进入学习历史的错误词使用安全移出：停止出题、清除错误记忆信号，并保留已完成历史引用。",
+      "state": "confirmed",
+      "priority": "core",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "required_evidence": [
+        "artifacts/release-gate/library-safety/safe-retirement.json"
+      ],
+      "evidence": [
+        "artifacts/release-gate/library-safety/safe-retirement.json"
+      ],
+      "verification_commands": [
+        "node --import tsx server/src/tests/librarySafetyFixture.ts",
+        "node --import tsx server/src/tests/librarySafetyCheckpoint.ts"
+      ]
+    },
+    {
+      "id": "sentence-fragment-quality-guard",
+      "summary": "明显整句正文片段不得被人工确认后直接进入题库。",
+      "state": "confirmed",
+      "priority": "core",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "required_evidence": [
+        "artifacts/release-gate/library-safety/sentence-fragment-guard.json"
+      ],
+      "evidence": [
+        "artifacts/release-gate/library-safety/sentence-fragment-guard.json"
+      ],
+      "verification_commands": [
+        "node --import tsx server/src/tests/librarySafetyFixture.ts",
+        "node --import tsx server/src/tests/librarySafetyCheckpoint.ts"
+      ]
+    },
+    {
+      "id": "learning-day-library-date",
+      "summary": "词库日期筛选复用服务端学习日口径和02:00边界。",
+      "state": "confirmed",
+      "priority": "core",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "required_evidence": [
+        "artifacts/release-gate/library-safety/learning-day-date.json"
+      ],
+      "evidence": [
+        "artifacts/release-gate/library-safety/learning-day-date.json"
+      ],
+      "verification_commands": [
+        "node --import tsx server/src/tests/librarySafetyFixture.ts",
+        "node --import tsx server/src/tests/librarySafetyCheckpoint.ts"
+      ]
+    },
+    {
+      "id": "library-responsive-layout",
+      "summary": "桌面与400px词库均可读、可操作且不重叠。",
+      "state": "confirmed",
+      "priority": "core",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "required_evidence": [
+        "artifacts/release-gate/library-safety/library-desktop.png",
+        "artifacts/release-gate/library-safety/library-400px.png"
+      ],
+      "evidence": [
+        "artifacts/release-gate/library-safety/library-desktop.png",
+        "artifacts/release-gate/library-safety/library-400px.png"
+      ],
+      "verification_commands": [
+        "node scripts/verify-library-safety-runtime.mjs"
+      ]
+    },
+    {
+      "id": "library-filter-language",
+      "summary": "筛选、计数和维护操作使用准确中文与真实数据口径。",
+      "state": "confirmed",
+      "priority": "core",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "required_evidence": [
+        "artifacts/release-gate/library-safety/library-semantics.json"
+      ],
+      "evidence": [
+        "artifacts/release-gate/library-safety/library-semantics.json"
+      ],
+      "verification_commands": [
+        "node scripts/verify-library-safety-runtime.mjs"
+      ]
+    }
+  ],
+  "real_path_checks": [
+    {
+      "id": "library-real-data-read-only",
+      "status": "passed",
+      "verification_commands": [
+        "node scripts/verify-library-safety-runtime.mjs"
+      ],
+      "required_evidence": [
+        "artifacts/release-gate/library-safety/real-library-read-only.json",
+        "artifacts/release-gate/library-safety/library-desktop.png",
+        "artifacts/release-gate/library-safety/library-400px.png"
+      ],
+      "evidence": [
+        "artifacts/release-gate/library-safety/real-library-read-only.json",
+        "artifacts/release-gate/library-safety/library-desktop.png",
+        "artifacts/release-gate/library-safety/library-400px.png"
+      ]
+    }
+  ]
+}

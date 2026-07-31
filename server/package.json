@@ -1,7 +1,7 @@
 {
   "name": "learning-closure-server",
   "private": true,
-  "version": "0.1.0",
+  "version": "2.0.0",
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
@@ -9,7 +9,17 @@
     "start": "node dist/index.js",
     "test:section91": "tsx src/tests/section91Fixture.ts",
     "test:section92": "tsx src/tests/section92Fixture.ts",
-    "test:vocab": "node --import tsx src/tests/vocabFixture.ts"
+    "test:vocab": "node --import tsx src/tests/vocabFixture.ts",
+    "test:quiz-feedback-checkpoint": "node --import tsx src/tests/feedbackEnrichmentCheckpoint.ts",
+    "test:question-quality-focus": "node --import tsx src/tests/questionQualityFocusCheckpoint.ts",
+    "test:question-quality-focus-http": "node --import tsx src/tests/questionQualityFocusHttp.ts",
+    "test:focus-round-http": "node --import tsx src/tests/focusRoundPersistenceHttp.ts",
+    "test:fallback-quality-audit": "node --import tsx src/tests/fallbackQualityAudit.ts",
+    "vocab:feedback-audit": "node --import tsx src/scripts/vocabFeedbackGovernance.ts",
+    "vocab:feedback-enrich": "node --import tsx src/scripts/vocabFeedbackGovernance.ts --apply",
+    "vocab:question-quality-focus": "node --import tsx src/scripts/questionQualityFocusMigration.ts",
+    "test:daily-plan-release": "node --import tsx src/tests/dailyPlanRelease.ts",
+    "test:daily-plan-real-path": "node --import tsx src/tests/dailyPlanRelease.ts"
   },
   "dependencies": {
     "cors": "^2.8.5",

@@ -60,7 +60,7 @@ function setupCaptureListener() {
     } catch (error) {
       sendResponse({
         ok: false,
-        error: error instanceof Error ? error.message : "Unable to capture page"
+        error: error instanceof Error ? error.message : "无法获取网页内容。"
       });
     }
 
@@ -73,7 +73,7 @@ function captureCurrentPage(mode: CaptureMode, goal?: string, primaryGoalTrack?:
   const rawText = mode === "selection" ? selectedText : extractReadableText();
 
   if (!rawText.trim()) {
-    throw new Error(mode === "selection" ? "No selected text found on the page" : "No readable text found on the page");
+    throw new Error(mode === "selection" ? "当前网页没有选中文字。" : "当前网页没有可读取的文字。");
   }
 
   return {
@@ -82,7 +82,7 @@ function captureCurrentPage(mode: CaptureMode, goal?: string, primaryGoalTrack?:
     primaryGoalTrack: primaryGoalTrack ?? "LLM",
     subject: subject || "Canadian Constitutional Law",
     sourceType: detectSourceType(window.location.hostname, window.location.href),
-    title: document.title || "Untitled page",
+    title: document.title || "未命名网页",
     url: window.location.href,
     capturedAt: new Date().toISOString(),
     rawText: cleanText(rawText)
@@ -171,6 +171,7 @@ async function deliverPendingImageToVocabApp() {
 
     window.postMessage({
       type: "LCA_IMAGE_WORD_LOOKUP",
+      lookupEventId: imageKey,
       name: typeof payload.name === "string" ? payload.name : "dropped-image.png",
       mimeType: typeof payload.mimeType === "string" ? payload.mimeType : "image/png",
       dataUrl: payload.dataUrl
@@ -180,7 +181,7 @@ async function deliverPendingImageToVocabApp() {
   } catch {
     window.postMessage({
       type: "LCA_IMAGE_WORD_LOOKUP_ERROR",
-      message: "Unable to load dropped image. Try dragging it again."
+      message: "无法读取拖入的图片，请重新拖入。"
     }, window.location.origin);
   }
 }
@@ -191,8 +192,8 @@ function getOrCreateImageDropTarget(): HTMLDivElement {
 
   const target = document.createElement("div");
   target.id = imageDropTargetId;
-  target.title = "Drop word image to open Legal English Vocab";
-  target.textContent = "IMG";
+  target.title = "把词汇图片拖到这里识别";
+  target.textContent = "图";
   Object.assign(target.style, {
     position: "fixed",
     right: "18px",
@@ -205,7 +206,7 @@ function getOrCreateImageDropTarget(): HTMLDivElement {
     boxShadow: "0 12px 32px rgba(20, 35, 44, 0.26)",
     color: "#fff",
     display: "flex",
-    font: "800 12px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+    font: "700 14px PingFang SC, -apple-system, BlinkMacSystemFont, Microsoft YaHei, sans-serif",
     height: "54px",
     justifyContent: "center",
     letterSpacing: "0",
@@ -240,8 +241,8 @@ function getOrCreateImageDropTarget(): HTMLDivElement {
 }
 
 function setImageDropTargetActive(target: HTMLDivElement, active: boolean) {
-  target.textContent = active ? "DROP" : "IMG";
-  target.style.background = active ? "#16704a" : "#214c5f";
+  target.textContent = active ? "放" : "图";
+  target.style.background = active ? "#c68a2b" : "#17263c";
   target.style.transform = active ? "scale(1.08)" : "scale(1)";
 }
 
@@ -261,13 +262,13 @@ async function openVocabAppWithDroppedImage(file: File, target: HTMLDivElement) 
       mimeType: file.type,
       dataUrl
     }) as { ok: boolean; error?: string };
-    if (!response?.ok) throw new Error(response?.error || "Unable to open vocab app");
+    if (!response?.ok) throw new Error(response?.error || "无法打开查词页面。");
   } catch (error) {
-    target.textContent = "ERR";
+    target.textContent = "错";
     window.setTimeout(() => setImageDropTargetActive(target, false), 1400);
     showLookupPanel({
       term: file.name || "image",
-      status: error instanceof Error ? error.message : "Unable to open image lookup.",
+      status: error instanceof Error ? error.message : "无法打开图片识词。",
       isError: true
     });
   } finally {
@@ -279,7 +280,7 @@ function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.addEventListener("load", () => resolve(String(reader.result || "")));
-    reader.addEventListener("error", () => reject(new Error("Unable to read image file")));
+    reader.addEventListener("error", () => reject(new Error("无法读取图片文件。")));
     reader.readAsDataURL(file);
   });
 }
@@ -297,7 +298,7 @@ function showLookupButtonForSelection() {
   if (!rect || rect.width === 0 || rect.height === 0) return;
 
   const button = getOrCreateLookupButton();
-  button.textContent = "Look up";
+  button.textContent = "查词";
   button.style.left = `${Math.min(window.innerWidth - 96, Math.max(12, rect.left + window.scrollX))}px`;
   button.style.top = `${Math.max(12, rect.bottom + window.scrollY + 8)}px`;
   button.dataset.term = selectedTerm;
@@ -316,10 +317,10 @@ function getOrCreateLookupButton(): HTMLButtonElement {
     zIndex: "2147483647",
     border: "0",
     borderRadius: "999px",
-    background: "#214c5f",
+    background: "#17263c",
     color: "#fff",
     cursor: "pointer",
-    font: "700 13px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+    font: "700 13px PingFang SC, -apple-system, BlinkMacSystemFont, Microsoft YaHei, sans-serif",
     padding: "8px 12px",
     boxShadow: "0 8px 24px rgba(20, 35, 44, 0.22)"
   });
@@ -335,13 +336,14 @@ function getOrCreateLookupButton(): HTMLButtonElement {
 }
 
 async function lookupSelectedTerm(term: string) {
+  const lookupEventId = crypto.randomUUID();
   showLookupPanel({
     term,
-    status: "Looking up..."
+    status: "正在查询..."
   });
 
   try {
-    const response = await lookupAndSaveTermDirectly(term);
+    const response = await lookupAndSaveTermDirectly(term, lookupEventId);
     renderLookupResponse(term, response);
   } catch (error) {
     showLookupPanel({
@@ -365,7 +367,7 @@ function renderLookupResponse(term: string, response: VocabLookupResponse) {
   if (!response.result.found) {
     showLookupPanel({
       term,
-      status: "No online dictionary result found.",
+      status: "暂未找到可靠的在线释义。",
       isError: true
     });
     return;
@@ -385,10 +387,10 @@ function renderLookupResponse(term: string, response: VocabLookupResponse) {
   });
 }
 
-async function lookupAndSaveTermDirectly(term: string): Promise<VocabLookupResponse> {
+async function lookupAndSaveTermDirectly(term: string, lookupEventId: string): Promise<VocabLookupResponse> {
   const cleanTerm = term.trim();
   if (!cleanTerm) {
-    return { ok: false, error: "No selected term found." };
+    return { ok: false, error: "没有找到选中的词汇。" };
   }
 
   const lookup = await requestLocalVocabApi<VocabLookupResult>(
@@ -407,7 +409,14 @@ async function lookupAndSaveTermDirectly(term: string): Promise<VocabLookupRespo
   try {
     const saveResult = await requestLocalVocabApi<{ created: boolean }>("/api/vocab/lookup/save-entry", {
       method: "POST",
-      body: JSON.stringify(lookup),
+      body: JSON.stringify({
+        ...lookup,
+        lookupEvent: {
+          eventId: lookupEventId,
+          source: "extension-selection",
+          occurredAt: new Date().toISOString()
+        }
+      }),
       timeoutMs: 12000
     });
 
@@ -444,13 +453,13 @@ async function requestLocalVocabApi<T>(
     const payload = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      throw new Error(typeof payload?.error === "string" ? payload.error : `Local vocab service returned ${response.status}.`);
+      throw new Error(typeof payload?.error === "string" ? payload.error : `本地学习服务返回异常（状态码 ${response.status}）。`);
     }
 
     return payload as T;
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
-      throw new Error("Lookup timed out. Check that Da Wang lookup is open, then try again.");
+      throw new Error("查询超时。请确认“大王查词”已打开，然后重试。");
     }
     throw error;
   } finally {
@@ -459,27 +468,27 @@ async function requestLocalVocabApi<T>(
 }
 
 function getLookupPanelStatus(saveStatus?: "saved" | "alreadySaved" | "failed" | "skipped", saveError?: string): string {
-  if (saveStatus === "saved") return "Saved for tomorrow";
-  if (saveStatus === "alreadySaved") return "Already in review";
-  if (saveStatus === "failed") return saveError || "Looked up, but save failed.";
-  return "Looked up";
+  if (saveStatus === "saved") return "已加入复习计划";
+  if (saveStatus === "alreadySaved") return "已在复习计划中";
+  if (saveStatus === "failed") return saveError || "查询完成，但保存失败。";
+  return "查询完成";
 }
 
 function getLookupErrorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error || "");
   if (message.toLowerCase().includes("failed to fetch") || message.toLowerCase().includes("networkerror")) {
-    return "Local vocab service is not reachable. Open Da Wang lookup, then try again.";
+    return "无法连接本地学习服务。请先打开“大王查词”，然后重试。";
   }
   if (message.toLowerCase().includes("local vocab app is not running")) {
-    return "Open Da Wang lookup first, then try again.";
+    return "请先打开“大王查词”，然后重试。";
   }
   if (message.toLowerCase().includes("lookup timed out")) {
-    return "Lookup is taking too long. Check that Da Wang lookup is open, then try again.";
+    return "查询时间过长。请确认“大王查词”已打开，然后重试。";
   }
   if (message.toLowerCase().includes("extension context invalidated")) {
-    return "The extension was refreshed. Refresh this webpage once, then select the term again.";
+    return "扩展刚刚刷新。请刷新一次当前网页，然后重新选词。";
   }
-  return message || "Lookup failed. Open Da Wang lookup, then try again.";
+  return message || "查询失败。请打开“大王查词”后重试。";
 }
 
 function showLookupPanel(data: {
@@ -507,7 +516,7 @@ function showLookupPanel(data: {
   const title = document.createElement("strong");
   title.textContent = data.term;
   title.style.display = "block";
-  title.style.color = "#172832";
+  title.style.color = "#17263c";
   title.style.fontSize = "18px";
   titleWrap.append(title);
 
@@ -518,8 +527,8 @@ function showLookupPanel(data: {
     phonetic.style.marginTop = "6px";
     phonetic.style.padding = "4px 8px";
     phonetic.style.borderRadius = "999px";
-    phonetic.style.background = "#edf3f5";
-    phonetic.style.color = "#405662";
+    phonetic.style.background = "#ebe6de";
+    phonetic.style.color = "#526073";
     titleWrap.append(phonetic);
   }
 
@@ -538,27 +547,27 @@ function showLookupPanel(data: {
   status.style.padding = "8px 10px";
   status.style.borderRadius = "8px";
   status.style.fontWeight = "800";
-  status.style.background = data.isError ? "#f8e4df" : "#d9eadf";
-  status.style.color = data.isError ? "#8b2f1d" : "#22513a";
+  status.style.background = data.isError ? "#fff1ed" : "#eef5ef";
+  status.style.color = data.isError ? "#8f3431" : "#365e43";
   panel.append(status);
 
   if (data.sourceLabel || data.lookupQuality) {
     panel.append(createMetaBlock([
-      data.sourceLabel,
+      data.sourceLabel ? formatSourceLabel(data.sourceLabel) : "",
       data.lookupQuality ? formatLookupQuality(data.lookupQuality) : ""
     ].filter(Boolean).join(" · ")));
   }
 
   if (data.lookupWarning) {
-    panel.append(createStatusBlock(data.lookupWarning, false, true));
+    panel.append(createStatusBlock(formatLookupWarning(data.lookupWarning), false, true));
   }
 
   if (data.chineseDefinition && data.definition) {
     panel.append(createDefinitionBlock("中文", data.chineseDefinition));
-    panel.append(createDefinitionBlock("English", data.definition));
-    panel.append(createDefinitionBlock("Legal context", data.legalContext || "普通词，但在法律材料中应结合上下文理解。"));
+    panel.append(createDefinitionBlock("英文释义", data.definition));
+    panel.append(createDefinitionBlock("法律语境", data.legalContext || "普通词，但在法律材料中应结合上下文理解。"));
   } else if (data.definition && !data.isError) {
-    panel.append(createStatusBlock("Preparing Chinese and English definitions...", false));
+    panel.append(createStatusBlock("正在整理中英文释义...", false));
   }
 
   if (data.definition && data.chineseDefinition) {
@@ -574,7 +583,7 @@ function showLookupPanel(data: {
 
     const speak = document.createElement("button");
     speak.type = "button";
-    speak.textContent = "Speak";
+    speak.textContent = "发音";
     Object.assign(speak.style, panelActionButtonStyle());
     speak.addEventListener("click", () => speakText(data.term));
     actions.append(speak);
@@ -598,12 +607,12 @@ function getOrCreateLookupPanel(): HTMLDivElement {
     width: "min(380px, calc(100vw - 36px))",
     maxHeight: "min(520px, calc(100vh - 36px))",
     overflow: "auto",
-    background: "#fff",
-    border: "1px solid #d8e0e4",
-    borderRadius: "10px",
+    background: "#fffdf8",
+    border: "1px solid #d8d0c4",
+    borderRadius: "8px",
     boxShadow: "0 18px 50px rgba(20, 35, 44, 0.24)",
-    color: "#23323a",
-    font: "14px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+    color: "#27364b",
+    font: "14px PingFang SC, -apple-system, BlinkMacSystemFont, Microsoft YaHei, sans-serif",
     padding: "16px"
   });
   document.body.append(panel);
@@ -615,15 +624,15 @@ function createDefinitionBlock(label: string, text: string): HTMLElement {
   Object.assign(block.style, {
     marginTop: "12px",
     padding: "10px 12px",
-    border: "1px solid #d8e0e4",
+    border: "1px solid #ded7cd",
     borderRadius: "8px",
-    background: "#f7f9fa"
+    background: "#f8f4ed"
   });
 
   const tag = document.createElement("span");
   tag.textContent = label;
   tag.style.display = "block";
-  tag.style.color = "#60707a";
+  tag.style.color = "#667085";
   tag.style.fontSize = "12px";
   tag.style.fontWeight = "800";
   tag.style.marginBottom = "6px";
@@ -645,8 +654,8 @@ function createMetaBlock(text: string): HTMLElement {
   meta.style.marginTop = "10px";
   meta.style.padding = "5px 9px";
   meta.style.borderRadius = "999px";
-  meta.style.background = "#edf3f5";
-  meta.style.color = "#405662";
+  meta.style.background = "#ebe6de";
+  meta.style.color = "#526073";
   meta.style.fontSize = "12px";
   meta.style.fontWeight = "800";
   return meta;
@@ -659,17 +668,37 @@ function createStatusBlock(text: string, isError: boolean, isWarning = false): H
   status.style.padding = "8px 10px";
   status.style.borderRadius = "8px";
   status.style.fontWeight = "800";
-  status.style.background = isError ? "#f8e4df" : isWarning ? "#fff3d6" : "#d9eadf";
-  status.style.color = isError ? "#8b2f1d" : isWarning ? "#6b4b00" : "#22513a";
+  status.style.background = isError ? "#fff1ed" : isWarning ? "#fff5dd" : "#eef5ef";
+  status.style.color = isError ? "#8f3431" : isWarning ? "#765016" : "#365e43";
   return status;
 }
 
 function formatLookupQuality(quality: "ai-legal" | "legal-glossary" | "saved" | "reference" | "dictionary"): string {
-  if (quality === "ai-legal") return "AI legal";
-  if (quality === "legal-glossary") return "Legal glossary";
-  if (quality === "saved") return "Saved";
-  if (quality === "reference") return "Reference";
-  return "Fallback";
+  if (quality === "ai-legal") return "AI 法律释义";
+  if (quality === "legal-glossary") return "法律词典";
+  if (quality === "saved") return "已保存";
+  if (quality === "reference") return "参考资料";
+  return "备用释义";
+}
+
+function formatSourceLabel(label: string): string {
+  return {
+    "Saved review item": "已保存词条",
+    "Fallback dictionary": "备用在线词典",
+    "Built-in legal glossary": "法律术语表",
+    "Legal glossary": "法律术语表",
+    "Reference fallback": "参考资料",
+    "AI legal dictionary": "AI 法律词典"
+  }[label] ?? label;
+}
+
+function formatLookupWarning(warning: string): string {
+  return {
+    "This old entry looks like a reference summary or non-legal result. Review before using it in quizzes.": "这个旧词条可能是参考摘要或非法律释义，请确认后再用于测试。",
+    "This old entry was saved before quality tracking. Review its legal meaning before relying on it.": "这个旧词条保存于质量检查启用之前，请确认其法律含义。",
+    "This is a fallback definition. Legal meaning may need AI legal lookup.": "当前为备用释义，法律含义可能需要进一步检索确认。",
+    "This is a reference summary, not a concise dictionary definition.": "当前内容是参考摘要，并非精炼的词典释义。"
+  }[warning] ?? warning;
 }
 
 function createVoicePicker(): HTMLElement | null {
@@ -678,23 +707,23 @@ function createVoicePicker(): HTMLElement | null {
   const label = document.createElement("label");
   Object.assign(label.style, {
     alignItems: "center",
-    color: "#59666f",
+    color: "#667085",
     display: "flex",
     gap: "8px",
     marginTop: "12px"
   });
 
   const labelText = document.createElement("span");
-  labelText.textContent = "Voice";
+  labelText.textContent = "声音";
   labelText.style.fontSize = "12px";
   labelText.style.fontWeight = "800";
 
   const select = document.createElement("select");
   Object.assign(select.style, {
-    background: "#fff",
-    border: "1px solid #cbd5db",
+    background: "#fffdf8",
+    border: "1px solid #cfc6b9",
     borderRadius: "6px",
-    color: "#1f2933",
+    color: "#17263c",
     minHeight: "34px",
     maxWidth: "260px",
     padding: "0 8px"
@@ -720,10 +749,10 @@ function panelIconButtonStyle(): Partial<CSSStyleDeclaration> {
   return {
     border: "0",
     borderRadius: "6px",
-    background: "#dde5e9",
-    color: "#21323b",
+    background: "#ebe6de",
+    color: "#17263c",
     cursor: "pointer",
-    font: "800 18px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+    font: "700 18px PingFang SC, -apple-system, BlinkMacSystemFont, Microsoft YaHei, sans-serif",
     height: "34px",
     width: "34px"
   };
@@ -733,10 +762,10 @@ function panelActionButtonStyle(): Partial<CSSStyleDeclaration> {
   return {
     border: "0",
     borderRadius: "6px",
-    background: "#214c5f",
+    background: "#17263c",
     color: "#fff",
     cursor: "pointer",
-    font: "800 14px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+    font: "700 14px PingFang SC, -apple-system, BlinkMacSystemFont, Microsoft YaHei, sans-serif",
     minHeight: "38px",
     padding: "0 14px"
   };

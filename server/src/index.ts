@@ -6,6 +6,7 @@ import { lastActionRouter } from "./routes/lastAction.js";
 import { progressRouter } from "./routes/progress.js";
 import { saveRouter } from "./routes/save.js";
 import { vocabRouter } from "./routes/vocab.js";
+import { startVocabFeedbackEnrichmentWorker } from "./services/vocab.js";
 
 dotenv.config({ path: "server/.env" });
 dotenv.config();
@@ -33,4 +34,5 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
 
 app.listen(port, () => {
   console.log(`Learning Closure Agent server running at http://localhost:${port}`);
+  void startVocabFeedbackEnrichmentWorker();
 });

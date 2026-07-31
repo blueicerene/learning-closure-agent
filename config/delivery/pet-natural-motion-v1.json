@@ -1,0 +1,146 @@
+{
+  "schema_version": 1,
+  "iteration": "pet-natural-motion-v1",
+  "core_goal": "融合大王真实照片身份细节与猫科自然动作规律，制作侧卧待机和坐姿悬停两个更真实、更生动且身份一致的透明动画预览。",
+  "contract_owner": "PMO",
+  "status": "revision_required",
+  "in_scope": [
+    "pet-natural-identity-master",
+    "pet-natural-reclining-preview",
+    "pet-natural-hover-preview",
+    "pet-natural-motion-preview-qa"
+  ],
+  "out_of_scope": [
+    "用户验收前替换当前运行版桌宠",
+    "修改左右拖动行走、拖图、学习状态或提醒动作",
+    "修改查词、测试、词库、计划、日历或提醒逻辑",
+    "重新设计黑色礼服或改变大王的银灰虎斑身份",
+    "本阶段制作完整九状态或8x11宠物图集"
+  ],
+  "do_not_break": [
+    "当前已验收桌宠继续正常运行",
+    "透明窗口、图片拖放、左右行走和中文气泡保持可用",
+    "新预览只写入独立资产与证据目录",
+    "不得用不同生成结果逐帧拼接造成换脸、体型漂移或光照跳变"
+  ],
+  "decisions": [
+    {
+      "id": "pet-natural-identity-master",
+      "summary": "以IMG_0038锁定礼服与正面身份，以IMG_9498、IMG_5127、IMG_7744补充侧卧体态、体型和毛纹，建立两个状态共用的高保真身份母版。",
+      "state": "confirmed",
+      "priority": "core",
+      "implemented": true,
+      "verified_on_real_path": false,
+      "required_evidence": [
+        "artifacts/release-gate/pet-natural-motion-v1/identity-reference-sheet.png"
+      ],
+      "evidence": [
+        "artifacts/pet-natural-motion-v1/masters/reclining-master.png",
+        "artifacts/pet-natural-motion-v1/masters/hover-master.png",
+        "artifacts/release-gate/pet-natural-motion-v1/identity-reference-sheet.png"
+      ],
+      "verification_commands": [
+        "scripts/verify-pet-natural-motion-preview.sh"
+      ]
+    },
+    {
+      "id": "pet-natural-reclining-preview",
+      "summary": "侧卧待机遵循真实接触面与呼吸规律，加入不规则慢眨眼、双耳独立微动、胸腹呼吸和尾根稳定的松弛尾尖动作。",
+      "state": "confirmed",
+      "priority": "core",
+      "implemented": true,
+      "verified_on_real_path": false,
+      "required_evidence": [
+        "artifacts/release-gate/pet-natural-motion-v1/reclining-preview.gif",
+        "artifacts/release-gate/pet-natural-motion-v1/reclining-motion-qa.json"
+      ],
+      "evidence": [
+        "artifacts/release-gate/pet-natural-motion-v1/reclining-preview.gif",
+        "artifacts/release-gate/pet-natural-motion-v1/reclining-preview.apng",
+        "artifacts/release-gate/pet-natural-motion-v1/reclining-preview-animated.png",
+        "artifacts/release-gate/pet-natural-motion-v1/reclining-preview-small.gif",
+        "artifacts/release-gate/pet-natural-motion-v1/reclining-motion-qa.json",
+        "artifacts/release-gate/pet-natural-motion-v1/browser-playback-desktop-t1.png",
+        "artifacts/release-gate/pet-natural-motion-v1/browser-playback-desktop-t2.png"
+      ],
+      "verification_commands": [
+        "scripts/verify-pet-natural-motion-preview.sh"
+      ]
+    },
+    {
+      "id": "pet-natural-hover-preview",
+      "summary": "坐姿悬停遵循视线先行、耳朵转向、头颈肩随后联动与前爪承重规律，加入不规则眨眼和盘尾慢摆。",
+      "state": "confirmed",
+      "priority": "core",
+      "implemented": true,
+      "verified_on_real_path": false,
+      "required_evidence": [
+        "artifacts/release-gate/pet-natural-motion-v1/hover-preview.gif",
+        "artifacts/release-gate/pet-natural-motion-v1/hover-motion-qa.json"
+      ],
+      "evidence": [
+        "artifacts/release-gate/pet-natural-motion-v1/hover-preview.gif",
+        "artifacts/release-gate/pet-natural-motion-v1/hover-preview.apng",
+        "artifacts/release-gate/pet-natural-motion-v1/hover-preview-animated.png",
+        "artifacts/release-gate/pet-natural-motion-v1/hover-preview-small.gif",
+        "artifacts/release-gate/pet-natural-motion-v1/hover-motion-qa.json",
+        "artifacts/release-gate/pet-natural-motion-v1/browser-playback-desktop-t1.png",
+        "artifacts/release-gate/pet-natural-motion-v1/browser-playback-desktop-t2.png"
+      ],
+      "verification_commands": [
+        "scripts/verify-pet-natural-motion-preview.sh"
+      ]
+    },
+    {
+      "id": "pet-natural-motion-preview-qa",
+      "summary": "验证透明边缘、小尺寸清晰度、身份一致性、接触面稳定、局部运动连续性和无换脸/重影；本阶段不接入运行版。",
+      "state": "confirmed",
+      "priority": "core",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "required_evidence": [
+        "artifacts/release-gate/pet-natural-motion-v1/preview-contact-sheet.png",
+        "artifacts/release-gate/pet-natural-motion-v1/preview.html",
+        "artifacts/release-gate/pet-natural-motion-v1/preview-qa.json",
+        "artifacts/release-gate/pet-natural-motion-v1/browser-playback-qa.json",
+        "artifacts/release-gate/pet-natural-motion-v1/browser-playback-narrow-t1.png",
+        "artifacts/release-gate/pet-natural-motion-v1/browser-playback-narrow-t2.png"
+      ],
+      "evidence": [
+        "artifacts/release-gate/pet-natural-motion-v1/preview-contact-sheet.png",
+        "artifacts/release-gate/pet-natural-motion-v1/preview.html",
+        "artifacts/release-gate/pet-natural-motion-v1/preview-qa.json",
+        "artifacts/release-gate/pet-natural-motion-v1/browser-playback-qa.json",
+        "artifacts/release-gate/pet-natural-motion-v1/browser-playback-narrow-t1.png",
+        "artifacts/release-gate/pet-natural-motion-v1/browser-playback-narrow-t2.png"
+      ],
+      "verification_commands": [
+        "scripts/verify-pet-natural-motion-preview.sh"
+      ]
+    }
+  ],
+  "real_path_checks": [
+    {
+      "id": "natural-motion-browser-preview",
+      "path": "独立透明预览与小尺寸预览",
+      "status": "failed_visual_quality",
+      "verification_commands": [
+        "scripts/verify-pet-natural-motion-preview.sh"
+      ],
+      "required_evidence": [
+        "artifacts/release-gate/pet-natural-motion-v1/browser-playback-qa.json",
+        "artifacts/release-gate/pet-natural-motion-v1/browser-playback-desktop-t1.png",
+        "artifacts/release-gate/pet-natural-motion-v1/browser-playback-desktop-t2.png",
+        "artifacts/release-gate/pet-natural-motion-v1/browser-playback-narrow-t1.png",
+        "artifacts/release-gate/pet-natural-motion-v1/browser-playback-narrow-t2.png"
+      ],
+      "evidence": [
+        "artifacts/release-gate/pet-natural-motion-v1/browser-playback-qa.json",
+        "artifacts/release-gate/pet-natural-motion-v1/browser-playback-desktop-t1.png",
+        "artifacts/release-gate/pet-natural-motion-v1/browser-playback-desktop-t2.png",
+        "artifacts/release-gate/pet-natural-motion-v1/browser-playback-narrow-t1.png",
+        "artifacts/release-gate/pet-natural-motion-v1/browser-playback-narrow-t2.png"
+      ]
+    }
+  ]
+}

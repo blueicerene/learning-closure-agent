@@ -15,12 +15,16 @@
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.1.0</string>
+  <string>2.0.0</string>
   <key>CFBundleVersion</key>
-  <string>1</string>
+  <string>2</string>
   <key>LSMinimumSystemVersion</key>
   <string>13.0</string>
   <key>NSHighResolutionCapable</key>
   <true/>
+  <key>NSRemindersUsageDescription</key>
+  <string>大王需要访问提醒事项，以便在每日复习未完成时于 20:00 提醒，并同步到你的 iPhone。</string>
+  <key>NSRemindersFullAccessUsageDescription</key>
+  <string>大王只会维护一条每日复习提醒，并在当天计划完成后同步完成状态。</string>
 </dict>
 </plist>

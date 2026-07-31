@@ -1,16 +1,21 @@
 import assert from "node:assert/strict";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
   backfillVocabQuality,
+  calculateDailyTestStreak,
+  enrichVocabFeedbackDetails,
   getLearningStatus,
+  getVocabFeedbackEnrichmentAudit,
   getVocabItems,
   getVocabReview,
   importVocabText,
   lookupDictionaryTerm,
   markVocabQualityOk,
+  parseOpenAILegalLookupPayload,
   parseVocabText,
+  recordQuizQuestionStarted,
   recordVocabAnswer,
   saveDictionaryEntry,
   saveDictionaryTerm
@@ -138,7 +143,7 @@ bad line without separator
       term: "The Prank Panel",
       definition: "The Prank Panel is an American reality comedy series that aired on ABC."
     }),
-    /does not look like a legal English term/
+    /不像法律英语词汇/
   );
 
   const savedLookupResult = await saveDictionaryTerm("promulgated");
@@ -149,11 +154,69 @@ bad line without separator
   assert.equal(savedLookup.chineseDefinition, "正式颁布；公布");
   assert.equal(savedLookup.phonetic, "/ˈprɒməlɡeɪt/");
   assert.equal(savedLookup.pronunciation, "/ˈprɒməlɡeɪt/");
-  assert.equal(savedLookup.reviewState.nextReviewAt, new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
+  assert.equal(savedLookup.reviewState.nextReviewAt, addDateKeyDays(torontoDateKey(new Date()), 1));
 
   const repeatedLookupResult = await saveDictionaryTerm("promulgated");
   assert.equal(repeatedLookupResult.created, false);
   assert.equal(repeatedLookupResult.item.id, savedLookup.id);
+
+  const firstTrackedLookup = await saveDictionaryEntry(lookup, {
+    eventId: "web-promulgated-1",
+    source: "web",
+    occurredAt: "2026-07-25T12:00:00.000Z"
+  });
+  assert.equal(firstTrackedLookup.item.lookupStats?.count, 1);
+  assert.equal(firstTrackedLookup.item.lookupStats?.historicalCountKnown, false);
+  assert.equal(firstTrackedLookup.item.isImportant, false);
+
+  const deduplicatedLookup = await saveDictionaryEntry(lookup, {
+    eventId: "web-promulgated-1",
+    source: "web",
+    occurredAt: "2026-07-25T12:00:01.000Z"
+  });
+  assert.equal(deduplicatedLookup.item.lookupStats?.count, 1);
+
+  const secondTrackedLookup = await saveDictionaryEntry(lookup, {
+    eventId: "extension-promulgated-2",
+    source: "extension-selection",
+    occurredAt: "2026-07-25T12:01:00.000Z"
+  });
+  assert.equal(secondTrackedLookup.item.lookupStats?.count, 2);
+  assert.equal(secondTrackedLookup.item.lookupStats?.sources.web, 1);
+  assert.equal(secondTrackedLookup.item.lookupStats?.sources["extension-selection"], 1);
+  assert.equal(secondTrackedLookup.item.isImportant, true);
+
+  const firstLookupForNewItem = await saveDictionaryEntry({
+    term: "tracked legal term",
+    definition: "A legal term created after lookup tracking began for a new saved entry."
+  }, {
+    eventId: "desktop-new-term-1",
+    source: "desktop-image",
+    occurredAt: "2026-07-25T12:02:00.000Z"
+  });
+  assert.equal(firstLookupForNewItem.item.lookupStats?.count, 1);
+  assert.equal(firstLookupForNewItem.item.lookupStats?.historicalCountKnown, true);
+  assert.equal(firstLookupForNewItem.item.isImportant, false);
+
+  const concurrentEntry = {
+    term: "concurrent tracked term",
+    definition: "A legal term used to verify concurrent lookup event deduplication."
+  };
+  await Promise.all([
+    saveDictionaryEntry(concurrentEntry, {
+      eventId: "concurrent-event-1",
+      source: "web",
+      occurredAt: "2026-07-25T12:03:00.000Z"
+    }),
+    saveDictionaryEntry(concurrentEntry, {
+      eventId: "concurrent-event-1",
+      source: "web",
+      occurredAt: "2026-07-25T12:03:00.000Z"
+    })
+  ]);
+  const concurrentTrackedItem = (await getVocabItems()).items.find((item) => item.term === concurrentEntry.term);
+  assert.equal(concurrentTrackedItem?.lookupStats?.count, 1);
+  assert.equal(concurrentTrackedItem?.isImportant, false);
 
   const savedImpositionResult = await saveDictionaryEntry({
     term: "imposition",
@@ -243,10 +306,156 @@ fiduciary duty: A duty to act loyally for another person's interests.
   assert.equal(review.questions[0].options.length, 4);
   assert.equal(new Set(review.questions[0].options).size, 4);
   assert.ok(review.questions[0].options.includes(review.questions[0].correctDefinition));
+  assert.ok(Array.isArray(review.questions[0].examples));
+
+  await saveDictionaryEntry({
+    term: "Estoppel",
+    definition: "A rule that prevents inconsistent conduct after reliance.",
+    phonetic: "/ɪˈstɒpəl/",
+    legalContext: "Courts may apply estoppel when one party relied on another party's earlier representation.",
+    legalNote: {
+      chineseMeaning: "禁止反言",
+      legalRegister: "法律术语",
+      contextExplanation: "Courts may apply estoppel when one party relied on another party's earlier representation.",
+      examples: [{
+        sentence: "The claimant was estopped from denying the earlier representation.",
+        translation: "申请人因禁止反言而不得否认先前的陈述。"
+      }]
+    }
+  });
+  await importVocabText("Estoppel - A rule that prevents inconsistent conduct after reliance.");
+  await saveDictionaryEntry({
+    term: "Estoppel",
+    definition: "A rule that prevents inconsistent conduct after reliance."
+  });
+  const preservedFeedbackItem = (await getVocabItems()).items.find((item) => item.term === "Estoppel");
+  assert.equal(preservedFeedbackItem?.phonetic, "/ɪˈstɒpəl/");
+  assert.ok(preservedFeedbackItem?.legalContext?.includes("earlier representation"));
+  assert.equal(preservedFeedbackItem?.legalNote?.examples.length, 1);
 
   const practiceAll = await getVocabReview("2026-07-08", "all");
   assert.equal(practiceAll.canStart, true);
   assert.equal(practiceAll.questions.length, 4);
+  const enrichedQuestion = practiceAll.questions.find((item) => item.term === "Estoppel");
+  assert.equal(enrichedQuestion?.phonetic, "/ɪˈstɒpəl/");
+  assert.ok(enrichedQuestion?.legalContext?.includes("earlier representation"));
+  assert.equal(enrichedQuestion?.examples.length, 1);
+  assert.ok(enrichedQuestion?.examples[0].sentence.includes("estopped"));
+
+  const aiFeedbackEntry = parseOpenAILegalLookupPayload("consideration", {
+    term: "consideration",
+    englishDefinition: "Something of value exchanged to support an enforceable agreement.",
+    chineseDefinition: "对价；支持合同具有可执行性的价值交换。",
+    legalContext: "在合同法中，对价通常是判断承诺能否获得执行的重要要素。",
+    phonetic: "/kənˌsɪdəˈreɪʃən/",
+    pronunciation: "/kənˌsɪdəˈreɪʃən/",
+    examples: [{
+      sentence: "The court found that nominal consideration was sufficient to support the agreement.",
+      translation: "法院认定名义对价足以支持该协议。"
+    }]
+  });
+  assert.ok(aiFeedbackEntry);
+  assert.equal(aiFeedbackEntry.legalNote?.examples.length, 1);
+  assert.equal(parseOpenAILegalLookupPayload("consideration", {
+    term: "valuable consideration",
+    englishDefinition: "Something of value exchanged to support an enforceable agreement.",
+    chineseDefinition: "对价",
+    legalContext: "在合同法中，对价支持承诺的可执行性。",
+    phonetic: "/kənˌsɪdəˈreɪʃən/",
+    examples: [{
+      sentence: "The agreement was supported by valuable consideration.",
+      translation: "该协议具有有价对价支持。"
+    }]
+  }), null);
+  assert.ok(parseOpenAILegalLookupPayload("Supremacy Clause", {
+    term: "Supremacy Clause",
+    englishDefinition: "A constitutional rule giving controlling effect to federal law over conflicting state law.",
+    chineseDefinition: "联邦法律优先于冲突州法的宪法规则。",
+    legalContext: "在宪法法律材料中，该术语用于分析联邦法与州法冲突。",
+    phonetic: "/səˈpreməsi klɔːz/",
+    examples: [{
+      sentence: "The Supremacy Clause controls when a valid state rule conflicts with federal law.",
+      translation: "当有效的州规则与联邦法律冲突时，联邦至上条款具有控制效力。"
+    }]
+  }));
+  assert.ok(parseOpenAILegalLookupPayload("charity / charities", {
+    term: "charity",
+    englishDefinition: "An organization established for legally recognized charitable purposes.",
+    chineseDefinition: "为法律认可的慈善目的而设立的组织。",
+    legalContext: "在慈善法中，该术语涉及组织目的、注册资格与监管义务。",
+    phonetic: "/ˈtʃærəti/",
+    examples: [{
+      sentence: "A charity must use its property only for its stated charitable purposes.",
+      translation: "慈善机构必须仅将其财产用于所声明的慈善目的。"
+    }]
+  }));
+  assert.equal(parseOpenAILegalLookupPayload("consideration", {
+    term: "consideration",
+    englishDefinition: "Something of value exchanged to support an enforceable agreement.",
+    chineseDefinition: "对价",
+    legalContext: "在合同法中，对价支持承诺的可执行性。",
+    phonetic: "con-sid-er-AY-shun",
+    examples: [{
+      sentence: "The promise lacked consideration and was not enforceable.",
+      translation: "该承诺缺乏对价，因此不可执行。"
+    }]
+  }), null);
+  assert.equal(parseOpenAILegalLookupPayload("consideration", {
+    term: "consideration",
+    englishDefinition: "Something of value exchanged to support an enforceable agreement.",
+    chineseDefinition: "对价",
+    legalContext: "在合同法中，对价支持承诺的可执行性。",
+    phonetic: "/kənˌsɪdəˈreɪʃən/",
+    examples: [{
+      sentence: "In Smith v. Jones 2024, the court found valid consideration.",
+      translation: "在该案中，法院认定存在有效对价。"
+    }]
+  }), null);
+  assert.equal(parseOpenAILegalLookupPayload("consideration", {
+    term: "consideration",
+    englishDefinition: "Something of value exchanged to support an enforceable agreement.",
+    chineseDefinition: "对价",
+    legalContext: "在合同法中，对价支持承诺的可执行性。",
+    examples: [{
+      sentence: "The parties signed the agreement.",
+      translation: "双方签署了协议。"
+    }]
+  }), null);
+
+  const feedbackTarget = (await getVocabItems()).items.find((item) => item.term.toLowerCase() === "consideration");
+  assert.ok(feedbackTarget);
+  const beforeFeedbackDryRun = await readFile(process.env.LEGAL_VOCAB_PATH!, "utf8");
+  const targetHistoryBefore = JSON.parse(beforeFeedbackDryRun).items
+    .find((item: { id: string }) => item.id === feedbackTarget.id);
+  const feedbackDryRun = await enrichVocabFeedbackDetails({
+    itemIds: [feedbackTarget.id],
+    dryRun: true,
+    resolveEntry: async () => aiFeedbackEntry
+  });
+  assert.equal(feedbackDryRun.enriched, 1);
+  assert.equal(await readFile(process.env.LEGAL_VOCAB_PATH!, "utf8"), beforeFeedbackDryRun);
+
+  const feedbackApplied = await enrichVocabFeedbackDetails({
+    itemIds: [feedbackTarget.id],
+    dryRun: false,
+    resolveEntry: async () => aiFeedbackEntry
+  });
+  assert.equal(feedbackApplied.enriched, 1);
+  const afterFeedbackStore = JSON.parse(await readFile(process.env.LEGAL_VOCAB_PATH!, "utf8"));
+  const targetHistoryAfter = afterFeedbackStore.items
+    .find((item: { id: string }) => item.id === feedbackTarget.id);
+  assert.equal(targetHistoryAfter.phonetic, "/kənˌsɪdəˈreɪʃən/");
+  assert.equal(targetHistoryAfter.legalNote.examples.length, 1);
+  assert.deepEqual(targetHistoryAfter.reviewState, targetHistoryBefore.reviewState);
+  assert.equal(targetHistoryAfter.definition, targetHistoryBefore.definition);
+  assert.equal(targetHistoryAfter.createdAt, targetHistoryBefore.createdAt);
+  assert.equal(targetHistoryAfter.updatedAt, targetHistoryBefore.updatedAt);
+  const feedbackAudit = await getVocabFeedbackEnrichmentAudit();
+  assert.ok(feedbackAudit.total >= feedbackAudit.complete);
+  assert.equal(
+    feedbackAudit.total,
+    feedbackAudit.complete + feedbackAudit.missingAny
+  );
 
   const question = review.questions.find((item) => item.term === "Estoppel");
   assert.ok(question);
@@ -343,13 +552,17 @@ fiduciary duty: A duty to act loyally for another person's interests.
     ]
   }), "utf8");
   const repairedReview = await getVocabReview("2026-07-18", "all");
-  assert.equal(repairedReview.canStart, true);
-  assert.equal(repairedReview.questions.length, 4);
+  assert.equal(repairedReview.canStart, false);
   const repairedCustody = (await getVocabItems()).items.find((item) => item.term === "custody");
   assert.equal(repairedCustody?.definition, "The state of being kept under legal restraint.");
+  assert.equal(repairedCustody?.lookupQuality, "dictionary");
+  await markVocabQualityOk(repairedCustody!.id);
+  const confirmedRepairReview = await getVocabReview("2026-07-18", "all");
+  assert.equal(confirmedRepairReview.canStart, true);
+  assert.equal(confirmedRepairReview.questions.length, 4);
 
   const now = new Date().toISOString();
-  const today = now.slice(0, 10);
+  const today = torontoDateKey(new Date(now));
   await writeFile(process.env.LEGAL_VOCAB_PATH!, JSON.stringify({
     version: "v0.1",
     updatedAt: now,
@@ -362,6 +575,7 @@ fiduciary duty: A duty to act loyally for another person's interests.
           status: "learning",
           correctStreak: 0,
           wrongCount: 2,
+          focus: true,
           lastResult: "wrong",
           lastReviewedAt: today,
           nextReviewAt: today
@@ -403,6 +617,7 @@ fiduciary duty: A duty to act loyally for another person's interests.
           status: "learning",
           correctStreak: 0,
           wrongCount: 3,
+          focus: true,
           lastResult: "wrong",
           lastReviewedAt: today,
           nextReviewAt: today
@@ -437,6 +652,29 @@ fiduciary duty: A duty to act loyally for another person's interests.
   const recentCorrectStatus = await getLearningStatus();
   assert.equal(recentCorrectStatus.petState, "encourage");
 
+  const expiredCorrectAt = new Date(Date.now() - 10_000).toISOString();
+  await writeFile(process.env.LEGAL_VOCAB_PATH!, JSON.stringify({
+    version: "v0.1",
+    updatedAt: expiredCorrectAt,
+    items: [
+      {
+        ...legacyItem("expired correct", "A due term whose success celebration has expired."),
+        createdAt: expiredCorrectAt,
+        updatedAt: expiredCorrectAt,
+        reviewState: {
+          status: "review",
+          correctStreak: 1,
+          wrongCount: 0,
+          lastResult: "correct",
+          lastReviewedAt: today,
+          nextReviewAt: today
+        }
+      }
+    ]
+  }), "utf8");
+  const expiredCorrectStatus = await getLearningStatus();
+  assert.equal(expiredCorrectStatus.petState, "due");
+
   await writeFile(process.env.LEGAL_VOCAB_PATH!, JSON.stringify({
     version: "v0.1",
     updatedAt: now,
@@ -445,6 +683,257 @@ fiduciary duty: A duty to act loyally for another person's interests.
   const idleStatus = await getLearningStatus();
   assert.equal(idleStatus.dueToday, 0);
   assert.equal(idleStatus.petState, "idle");
+
+  const eventTestNow = new Date().toISOString();
+  await writeFile(process.env.LEGAL_VOCAB_PATH!, JSON.stringify({
+    version: "v0.1",
+    updatedAt: eventTestNow,
+    items: [
+      legacyItem("event target", "The authoritative definition for the event target."),
+      legacyItem("event distractor one", "A distinct first distractor definition."),
+      legacyItem("event distractor two", "A distinct second distractor definition."),
+      legacyItem("event distractor three", "A distinct third distractor definition.")
+    ]
+  }), "utf8");
+
+  const correctEvent = await recordVocabAnswer({
+    itemId: "event-target",
+    selectedDefinition: "The authoritative definition for the event target.",
+    correctDefinition: "The authoritative definition for the event target.",
+    isCorrect: true,
+    answeredAt: eventTestNow,
+    sessionId: "event-session",
+    attemptKind: "plan"
+  });
+  assert.equal(correctEvent.reviewState.wrongStreak, 0);
+  const statusAfterCorrect = await getLearningStatus();
+  assert.equal(statusAfterCorrect.petState, "encourage");
+  assert.equal(statusAfterCorrect.recentReview?.result, "correct");
+
+  const firstWrongEvent = await recordVocabAnswer({
+    itemId: "event-target",
+    selectedDefinition: "A distinct first distractor definition.",
+    correctDefinition: "The authoritative definition for the event target.",
+    isCorrect: true,
+    answeredAt: eventTestNow,
+    sessionId: "event-session",
+    attemptKind: "plan"
+  });
+  assert.equal(firstWrongEvent.reviewState.lastResult, "wrong");
+  assert.equal(firstWrongEvent.reviewState.wrongStreak, 1);
+  const statusAfterFirstWrong = await getLearningStatus();
+  assert.equal(statusAfterFirstWrong.petState, "failure");
+  assert.equal(statusAfterFirstWrong.recentReview?.result, "wrong");
+  assert.equal(statusAfterFirstWrong.recentReview?.wrongStreak, 1);
+
+  const secondWrongEvent = await recordVocabAnswer({
+    itemId: "event-target",
+    selectedDefinition: "A distinct second distractor definition.",
+    correctDefinition: "The authoritative definition for the event target.",
+    isCorrect: false,
+    answeredAt: eventTestNow,
+    sessionId: "event-session",
+    attemptKind: "reinforcement"
+  });
+  assert.equal(secondWrongEvent.reviewState.wrongStreak, 2);
+  const statusAfterSecondWrong = await getLearningStatus();
+  assert.equal(statusAfterSecondWrong.petState, "focus");
+  assert.equal(statusAfterSecondWrong.recentReview?.wrongStreak, 2);
+
+  await recordVocabAnswer({
+    itemId: "event-target",
+    selectedDefinition: "The authoritative definition for the event target.",
+    correctDefinition: "The authoritative definition for the event target.",
+    isCorrect: true,
+    answeredAt: eventTestNow,
+    sessionId: "event-recovery-1",
+    attemptKind: "independent"
+  });
+  const statusAfterRecovery = await getLearningStatus();
+  assert.equal(statusAfterRecovery.petState, "encourage");
+  assert.equal(statusAfterRecovery.recentReview?.result, "correct");
+
+  const lifecycleBase = Date.now() - 1_000;
+  const lifecycleTime = (offset: number) => new Date(lifecycleBase + offset).toISOString();
+  await recordVocabAnswer({
+    itemId: "event-target",
+    selectedDefinition: "The authoritative definition for the event target.",
+    correctDefinition: "The authoritative definition for the event target.",
+    isCorrect: true,
+    answeredAt: lifecycleTime(100)
+  });
+  assert.equal((await getLearningStatus()).petState, "encourage");
+
+  await recordQuizQuestionStarted({
+    itemId: "event-distractor-one",
+    occurredAt: lifecycleTime(200)
+  });
+  const firstNextQuestionStatus = await getLearningStatus();
+  assert.equal(firstNextQuestionStatus.petState, "due");
+  assert.equal(firstNextQuestionStatus.message, "准备作答");
+  assert.equal(firstNextQuestionStatus.activeQuestion?.itemId, "event-distractor-one");
+
+  await recordVocabAnswer({
+    itemId: "event-distractor-one",
+    selectedDefinition: "A distinct second distractor definition.",
+    correctDefinition: "A distinct first distractor definition.",
+    isCorrect: false,
+    answeredAt: lifecycleTime(300)
+  });
+  const wrongSecondQuestionStatus = await getLearningStatus();
+  assert.equal(wrongSecondQuestionStatus.petState, "failure");
+  assert.equal(wrongSecondQuestionStatus.activeQuestion, undefined);
+
+  await recordVocabAnswer({
+    itemId: "event-target",
+    selectedDefinition: "The authoritative definition for the event target.",
+    correctDefinition: "The authoritative definition for the event target.",
+    isCorrect: true,
+    answeredAt: lifecycleTime(400)
+  });
+  await recordQuizQuestionStarted({
+    itemId: "event-distractor-one",
+    occurredAt: lifecycleTime(500)
+  });
+  assert.equal((await getLearningStatus()).petState, "due");
+
+  await recordVocabAnswer({
+    itemId: "event-distractor-one",
+    selectedDefinition: "A distinct first distractor definition.",
+    correctDefinition: "A distinct first distractor definition.",
+    isCorrect: true,
+    answeredAt: lifecycleTime(600)
+  });
+  const correctSecondQuestionStatus = await getLearningStatus();
+  assert.equal(correctSecondQuestionStatus.petState, "encourage");
+  assert.equal(correctSecondQuestionStatus.recentReview?.itemId, "event-distractor-one");
+  assert.equal(correctSecondQuestionStatus.activeQuestion, undefined);
+
+  await recordQuizQuestionStarted({
+    itemId: "event-distractor-one",
+    occurredAt: lifecycleTime(550)
+  });
+  const delayedStartStatus = await getLearningStatus();
+  assert.equal(delayedStartStatus.petState, "encourage");
+  assert.equal(delayedStartStatus.activeQuestion, undefined);
+
+  const torontoToday = torontoDateKey(new Date());
+  await writeFile(process.env.LEGAL_VOCAB_PATH!, JSON.stringify({
+    version: "v0.1",
+    updatedAt: new Date().toISOString(),
+    items: [
+      legacyItem("priority important", "The important new-word candidate definition."),
+      legacyItem("priority normal", "The ordinary new-word candidate definition."),
+      legacyItem("priority distractor one", "A distinct definition used as the first priority distractor."),
+      legacyItem("priority distractor two", "A distinct definition used as the second priority distractor.")
+    ]
+  }), "utf8");
+  const priorityEntry = {
+    term: "priority important",
+    definition: "The important new-word candidate definition."
+  };
+  await saveDictionaryEntry(priorityEntry, {
+    eventId: "priority-event-1",
+    source: "web",
+    occurredAt: "2026-07-25T14:00:00.000Z"
+  });
+  await saveDictionaryEntry(priorityEntry, {
+    eventId: "priority-event-2",
+    source: "extension-image",
+    occurredAt: "2026-07-25T14:01:00.000Z"
+  });
+  const priorityReview = await getVocabReview(addDateKeyDays(torontoToday, 1), "due");
+  const importantIndex = priorityReview.questions.findIndex((question) => question.term === "priority important");
+  const normalIndex = priorityReview.questions.findIndex((question) => question.term === "priority normal");
+  assert.ok(importantIndex >= 0);
+  assert.ok(normalIndex >= 0);
+  assert.ok(importantIndex < normalIndex);
+
+  await writeFile(process.env.LEGAL_VOCAB_PATH!, JSON.stringify({
+    version: "v0.1",
+    updatedAt: new Date().toISOString(),
+    items: [
+      legacyItem("daily one", "The first daily review definition."),
+      legacyItem("daily two", "The second daily review definition."),
+      legacyItem("daily three", "The third daily review definition."),
+      legacyItem("daily four", "The fourth daily review definition.")
+    ]
+  }), "utf8");
+  const dailyReview = await getVocabReview(torontoToday, "due");
+  assert.equal(dailyReview.questions.length, 4);
+
+  for (const question of dailyReview.questions.slice(0, 3)) {
+    await recordVocabAnswer({
+      itemId: question.itemId,
+      selectedDefinition: question.correctDefinition,
+      correctDefinition: question.correctDefinition,
+      isCorrect: true
+    });
+  }
+  const incompleteDailyStatus = await getLearningStatus();
+  assert.equal(incompleteDailyStatus.dailyPlanTotal, 4);
+  assert.equal(incompleteDailyStatus.dailyPlanCompleted, 3);
+  assert.equal(incompleteDailyStatus.dailyTestStreakDays, 0);
+
+  const finalDailyQuestion = dailyReview.questions[3];
+  await recordVocabAnswer({
+    itemId: finalDailyQuestion.itemId,
+    selectedDefinition: finalDailyQuestion.options.find((option) => option !== finalDailyQuestion.correctDefinition) ?? "",
+    correctDefinition: finalDailyQuestion.correctDefinition,
+    isCorrect: false
+  });
+  const completedDailyStatus = await getLearningStatus();
+  assert.equal(completedDailyStatus.dailyPlanCompleted, 4);
+  assert.equal(completedDailyStatus.dailyTestStreakDays, 1);
+
+  const completePlan = (date: string) => ({
+    date,
+    dueItemIds: [`due-${date}`],
+    completedItemIds: [`due-${date}`],
+    createdAt: `${date}T12:00:00.000Z`,
+    completedAt: `${date}T13:00:00.000Z`
+  });
+  const incompletePlan = (date: string) => ({
+    date,
+    dueItemIds: [`due-${date}`],
+    completedItemIds: [],
+    createdAt: `${date}T12:00:00.000Z`
+  });
+  assert.equal(calculateDailyTestStreak({
+    "2026-07-08": completePlan("2026-07-08"),
+    "2026-07-09": completePlan("2026-07-09"),
+    "2026-07-10": completePlan("2026-07-10")
+  }, "2026-07-10"), 3);
+  assert.equal(calculateDailyTestStreak({
+    "2026-07-08": completePlan("2026-07-08"),
+    "2026-07-09": incompletePlan("2026-07-09"),
+    "2026-07-10": completePlan("2026-07-10")
+  }, "2026-07-10"), 1);
+  assert.equal(calculateDailyTestStreak({
+    "2026-07-09": completePlan("2026-07-09"),
+    "2026-07-10": {
+      date: "2026-07-10",
+      dueItemIds: [],
+      completedItemIds: [],
+      createdAt: "2026-07-10T12:00:00.000Z"
+    }
+  }, "2026-07-10"), 1);
+
+  await writeFile(process.env.LEGAL_VOCAB_PATH!, JSON.stringify({
+    version: "v0.1",
+    updatedAt: "2026-07-26T02:30:00.000Z",
+    items: [legacyItem("timezone item", "A definition for testing the Toronto day boundary.")]
+  }), "utf8");
+  await recordVocabAnswer({
+    itemId: "timezone-item",
+    selectedDefinition: "A definition for testing the Toronto day boundary.",
+    correctDefinition: "A definition for testing the Toronto day boundary.",
+    isCorrect: true,
+    answeredAt: "2026-07-26T02:30:00.000Z"
+  });
+  const timezoneStore = JSON.parse(await readFile(process.env.LEGAL_VOCAB_PATH!, "utf8"));
+  assert.ok(timezoneStore.dailyReviewPlans["2026-07-25"]);
+  assert.equal(timezoneStore.dailyReviewPlans["2026-07-26"], undefined);
 
   await rm(tmpDir, { recursive: true, force: true });
   globalThis.fetch = originalFetch;
@@ -465,6 +954,23 @@ function legacyItem(term: string, definition: string) {
       wrongCount: 0
     }
   };
+}
+
+function torontoDateKey(date: Date): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Toronto",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function addDateKeyDays(dateKey: string, days: number): string {
+  const date = new Date(`${dateKey}T12:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
 }
 
 run().catch(async (error) => {

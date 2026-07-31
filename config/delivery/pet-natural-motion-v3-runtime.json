@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "iteration": "pet-natural-motion-v3-runtime",
+  "core_goal": "将用户已验收的 v3 侧卧待机与坐姿悬停动画接入 macOS 桌宠运行版，同时保持透明窗口、拖放识词、左右拖动行走和其他学习状态稳定。",
+  "contract_owner": "PMO",
+  "status": "ready",
+  "in_scope": [
+    "pet-natural-v3-runtime-assets",
+    "pet-natural-v3-runtime-timing",
+    "pet-natural-v3-runtime-regression"
+  ],
+  "out_of_scope": [
+    "修改左右拖动行走、拖图处理、学习状态或提醒动画",
+    "修改查词、测试、词库、计划、日历或提醒逻辑",
+    "重新生成或改变已验收 v3 角色视觉",
+    "制作完整九状态或 8x11 宠物图集"
+  ],
+  "do_not_break": [
+    "窗口保持透明、无方框、始终可见且可手动拖动",
+    "图片拖入继续进入现有 OCR 与查词流程",
+    "左右拖动继续显示方向正确的行走动画",
+    "中文气泡和学习状态映射保持可用",
+    "当前运行资产可从精确基线恢复"
+  ],
+  "decisions": [
+    {
+      "id": "pet-natural-v3-runtime-assets",
+      "summary": "把已验收的 96 帧侧卧待机与 96 帧坐姿悬停预览无失真地转换为运行版透明 PNG 序列。",
+      "state": "confirmed",
+      "priority": "core",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "required_evidence": [
+        "artifacts/release-gate/pet-natural-motion-v3-runtime/runtime-assets-qa.json"
+      ],
+      "evidence": [
+        "artifacts/release-gate/pet-natural-motion-v3-runtime/runtime-assets-qa.json"
+      ],
+      "verification_commands": [
+        "scripts/verify-pet-natural-motion-v3-runtime.sh"
+      ]
+    },
+    {
+      "id": "pet-natural-v3-runtime-timing",
+      "summary": "待机与悬停按 v3 的 65ms 帧节奏播放，其他学习状态继续使用原有约 110ms 节奏。",
+      "state": "confirmed",
+      "priority": "core",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "required_evidence": [
+        "artifacts/release-gate/pet-natural-motion-v3-runtime/runtime-timing-qa.json"
+      ],
+      "evidence": [
+        "artifacts/release-gate/pet-natural-motion-v3-runtime/runtime-timing-qa.json"
+      ],
+      "verification_commands": [
+        "scripts/verify-pet-natural-motion-v3-runtime.sh"
+      ]
+    },
+    {
+      "id": "pet-natural-v3-runtime-regression",
+      "summary": "运行版接入不得破坏透明窗口、悬停切换、左右拖动、图片拖放识词、中文气泡和学习状态。",
+      "state": "confirmed",
+      "priority": "core",
+      "implemented": true,
+      "verified_on_real_path": true,
+      "required_evidence": [
+        "artifacts/release-gate/pet-natural-motion-v3-runtime/runtime-regression.json",
+        "artifacts/release-gate/pet-natural-motion-v3-runtime/runtime-idle.png",
+        "artifacts/release-gate/pet-natural-motion-v3-runtime/runtime-hover.png"
+      ],
+      "evidence": [
+        "artifacts/release-gate/pet-natural-motion-v3-runtime/runtime-regression.json",
+        "artifacts/release-gate/pet-natural-motion-v3-runtime/runtime-idle.png",
+        "artifacts/release-gate/pet-natural-motion-v3-runtime/runtime-hover.png"
+      ],
+      "verification_commands": [
+        "scripts/verify-pet-natural-motion-v3-runtime.sh"
+      ]
+    }
+  ],
+  "real_path_checks": [
+    {
+      "id": "pet-natural-v3-live-app",
+      "path": "已签名的 Codex Pet · 大王.app 真实透明窗口",
+      "status": "passed",
+      "required_evidence": [
+        "artifacts/release-gate/pet-natural-motion-v3-runtime/runtime-idle.png",
+        "artifacts/release-gate/pet-natural-motion-v3-runtime/runtime-hover.png",
+        "artifacts/release-gate/pet-natural-motion-v3-runtime/runtime-regression.json"
+      ],
+      "evidence": [
+        "artifacts/release-gate/pet-natural-motion-v3-runtime/runtime-idle.png",
+        "artifacts/release-gate/pet-natural-motion-v3-runtime/runtime-hover.png",
+        "artifacts/release-gate/pet-natural-motion-v3-runtime/runtime-regression.json"
+      ],
+      "verification_commands": [
+        "scripts/verify-pet-natural-motion-v3-runtime.sh"
+      ]
+    }
+  ]
+}

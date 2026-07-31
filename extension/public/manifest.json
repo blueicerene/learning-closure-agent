@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Learning Closure Agent",
-  "version": "0.1.0",
-  "description": "Close a learning session with summary, knowledge cards, and next actions.",
+  "name": "大王学习助手",
+  "version": "2.0.0",
+  "description": "查法律英语、完成每日复习，并整理学习收尾。",
   "permissions": ["activeTab", "contextMenus", "scripting", "storage"],
   "host_permissions": [
     "http://localhost:3333/*",
@@ -23,7 +23,7 @@
   ],
   "action": {
     "default_popup": "src/popup/popup.html",
-    "default_title": "Learning Closure Agent"
+    "default_title": "大王学习助手"
   },
   "background": {
     "service_worker": "assets/background.js",

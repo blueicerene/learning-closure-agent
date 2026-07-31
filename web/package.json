@@ -1,11 +1,16 @@
 {
   "name": "legal-vocab-web",
   "private": true,
-  "version": "0.1.0",
+  "version": "2.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5174",
-    "build": "tsc -p tsconfig.json --noEmit && vite build"
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "test:daily-plan-release": "node --import tsx src/tests/dailyPlanCalendarFixture.ts",
+    "test:focus-round": "node --import tsx src/tests/focusRoundFixture.ts",
+    "test:quiz-plan-progress": "node --import tsx src/tests/quizPlanProgressFixture.ts",
+    "test:quiz-result": "node --import tsx src/tests/quizResultFixture.ts",
+    "test:quiz-reinforcement": "node --import tsx src/tests/quizReinforcementFixture.ts"
   },
   "dependencies": {
     "react": "^18.3.1",

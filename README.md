@@ -1,4 +1,4 @@
-# Learning Closure Agent
+# 大王陪你背单词 · V2
 
 本地优先的法律英语学习工作台：在网页、PDF 与截图中查词，生成中英双语法律释义，自动加入间隔复习，并由桌面宠物“大王”提示学习节奏。
 
@@ -6,15 +6,18 @@ A local-first legal English learning workspace for bilingual dictionary lookup f
 
 项目同时保留最初的学习收尾能力：捕获一次学习会话，生成总结、关键知识、未解决问题与下一步行动，并保存为本地 Markdown。所有词库、复习状态和学习记录默认留在本机。
 
-## 当前产品 / Current Product
+## V2 稳定基线
 
-- 在线法律英语查词，固定返回中文释义、英文释义与法律语境。
+- 在线法律英语查词，返回中文释义、英文释义、音标、法律语境与例句。
 - 网页、NotebookLM、ChatGPT 和本地 PDF 选词查询。
 - 单词截图 OCR；拖入“大王”后自动识别、查询并进入词库。
-- 四选一英文释义测试与 Ebbinghaus 风格间隔复习。
-- 今日新增、待复习、连续学习天数和法律词掌握率。
-- 透明、可拖动的 macOS 桌面宠物，按待复习、答对和连续错题切换状态。
+- 冻结式每日计划：校准期每天最多 20 题，其中待进入计划词最多 10 个；积压词库不会成为当天债务。
+- 四选一英文释义测试、结果页发音/语境/例句，以及简化间隔复习与重点强化。
+- 最近 7 天与整月完成日历、20:00 每日提醒和本地词库质量治理。
+- 透明、可拖动、可接收图片的 macOS 桌面宠物，随待复习、作答和拖图状态变化。
 - 本地学习会话收尾、Markdown 输出与 Learning Standard 进度骨架。
+
+V2 的发布内容、验收事实和已知限制见 [docs/RELEASE_V2.md](docs/RELEASE_V2.md)。
 
 ## 项目解决的问题 / Problem
 
@@ -43,7 +46,7 @@ It is also not:
 - a full exam progress system
 - a knowledge graph product
 
-## v0.1 功能范围 / v0.1 Scope
+## 兼容保留：学习收尾能力
 
 Chrome Extension:
 
@@ -65,7 +68,7 @@ Local Server:
 - `classification-corrections.json`
 - Minimal learning standard support for `LLM / Canadian Constitutional Law`
 
-## v0.1 不支持什么 / Not Supported
+## 产品边界
 
 - cloud sync
 - user accounts
@@ -143,9 +146,7 @@ Use the extension:
 4. Click Generate Closure.
 5. Click Save.
 
-## 法律英语词汇选择题 / Legal Vocab Quiz
-
-v0.1 includes a local web app for manually pasted legal English vocabulary.
+## 法律英语词汇与每日复习
 
 Start the backend:
 
@@ -170,14 +171,14 @@ fiduciary duty: A duty to act loyally for another person's interests.
 - consideration: Something of value exchanged to form a binding contract.
 ```
 
-The quiz shows one English term and four English definitions. Wrong answers enter the local review queue, and correct streaks schedule the next review after 3 / 7 / 14 / 30 days.
+The quiz shows one English term and four English definitions. Wrong answers enter reinforcement, while successful independent reviews advance the spaced-review state.
 
-The dashboard and all entry points share one learning-status calculation:
+The dashboard and all entry points share one frozen daily-plan calculation:
 
-- words added today
-- words due today
-- consecutive learning days
-- mastered legal terms as a percentage of the local vocabulary
+- at most 20 planned questions during the calibration period
+- at most 10 pending-pool terms released into a day
+- due review before new terms
+- one stable plan that resumes from the next unanswered question
 
 Open `http://127.0.0.1:5174/?view=quiz` to go directly to today's review. The same status is available from `GET /api/vocab/learning-status`.
 
@@ -188,15 +189,15 @@ Vocabulary data is saved locally in `output/legal-vocab.json` and must not be co
 After loading the Chrome extension, supported study pages can look up selected legal English words:
 
 1. Start the local backend with `npm run dev:server`.
-2. Open NotebookLM, ChatGPT, eClass, CanLII, a supported legal website, or a local PDF in Chrome.
+2. Open NotebookLM, ChatGPT, eClass, CanLII, a supported legal website, or a PDF in Chrome.
 3. Select an English legal word or short phrase.
-4. Click the floating `Look up` button.
+4. On a supported webpage, click the floating `查词` button. In Chrome's built-in PDF viewer, right-click the selection and choose the single `查词` action.
 
 The extension sends only the selected word or short phrase to the local backend, shows English and Chinese definitions in a small page popup, and automatically saves the word into tomorrow's local vocab review queue.
 
-The page context menu also includes `大王：开始今日复习`, and the extension popup shows the same four learning indicators as the web app. Both reuse the existing local vocab tab.
+The selection context menu contains only `查词`; it does not include review routing or confirmation steps. Today's review remains available from the web home page, the extension popup, and the Da Wang desktop companion.
 
-Local PDFs use Chrome's file URL permission. If the floating button does not appear on a `file://` PDF, confirm `Allow access to file URLs` is enabled for the unpacked extension and refresh the PDF tab.
+Local PDFs use Chrome's file URL permission. Enable `Allow access to file URLs` for the unpacked extension. Chrome's built-in PDF viewer does not allow the extension to inject the webpage selection bubble, so PDF lookup uses the single right-click `查词` action instead.
 
 ### Codex Pet / 大王拖拽识词入口
 
@@ -328,7 +329,7 @@ The user is responsible for checking the terms, licenses, and exam-body rules th
 - API key is stored only in `server/.env`.
 - `.env`, `server/.env`, `output/`, `node_modules/`, and `dist/` must not be committed.
 
-See [docs/SECURITY.md](/Users/rene/Documents/学习助手/docs/SECURITY.md).
+See [docs/SECURITY.md](docs/SECURITY.md).
 
 ## Markdown Output
 
@@ -345,9 +346,9 @@ learning_standard_used: true
 status: "inbox"
 ```
 
-## Roadmap
+## 版本状态
 
-v0.2 已完成：Learning Standard、法律英语词库、复习流程与多入口学习助手。
+V2 已于 2026-07-31 暂时结项，作为当前稳定基线：Learning Standard、法律英语词库、冻结每日计划、复习流程、多入口学习助手、每日提醒与大王桌宠。
 
 - multi-source Learning Standard structure
 - progress tracked by `standardId`
@@ -360,6 +361,8 @@ v0.2 已完成：Learning Standard、法律英语词库、复习流程与多入�
 - local vocabulary library and Ebbinghaus-style review scheduling
 - Chrome study helper and learning-aware macOS companion
 
-后续不扩展为自动处理受限制考试材料的 Bar / NCA planner。考试机构和学习材料许可可能限制将授权材料输入、上传或传输到生成式 AI 工具；任何进一步的考试规划功能都必须先完成来源许可和合规边界设计。
+后续改进进入 V2.x 或下一里程碑，不回写 V2 基线。当前已知限制包括：iPhone iCloud 提醒同步与零重复事项仍需单独设备验证；7 天真实耗时校准只提出建议，不自动修改每日 20/10 配额。
+
+项目不扩展为自动处理受限制考试材料的 Bar / NCA planner。考试机构和学习材料许可可能限制将授权材料输入、上传或传输到生成式 AI 工具；任何进一步的考试规划功能都必须先完成来源许可和合规边界设计。
 
 当前产品定位：local-first legal English learning workspace and study-session closure layer for content the user is permitted to process.

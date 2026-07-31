@@ -2,14 +2,33 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import {
+  createDailyPlanV2,
+  getFrozenPlanPendingIds,
+  selectFrozenPlanItems,
+  type DailyPlanV2
+} from "./dailyPlan.js";
+
+const legalVocabTimeZone = process.env.LEGAL_VOCAB_TIME_ZONE || "America/Toronto";
 
 export type VocabStatus = "new" | "learning" | "review" | "mastered";
 export type VocabResult = "correct" | "wrong";
+export type LookupSource = "web" | "extension-selection" | "extension-image" | "desktop-image";
+
+export type LookupStats = {
+  count: number;
+  firstLookedUpAt: string;
+  lastLookedUpAt: string;
+  historicalCountKnown: boolean;
+  eventIds: string[];
+  sources: Partial<Record<LookupSource, number>>;
+};
 
 export type ReviewState = {
   status: VocabStatus;
   correctStreak: number;
   wrongCount: number;
+  wrongStreak?: number;
   memoryStrength?: number;
   easeFactor?: number;
   lastIntervalDays?: number;
@@ -17,6 +36,21 @@ export type ReviewState = {
   lastReviewedAt?: string;
   nextReviewAt?: string;
   lastResult?: VocabResult;
+  focus?: boolean;
+  focusRecoveryCorrectCount?: number;
+  focusRecoveryRoundId?: string;
+  focusRoundAttempted?: boolean;
+  focusRecoveryAttemptSessionId?: string;
+  reinforcementPending?: boolean;
+  reinforcementSessionId?: string;
+};
+
+export type QuestionQualityStatus = "eligible" | "pending-review";
+
+export type QuestionQuality = {
+  status: QuestionQualityStatus;
+  reasons?: string[];
+  evaluatedAt?: string;
 };
 
 export type VocabItem = {
@@ -31,6 +65,19 @@ export type VocabItem = {
   phonetic?: string;
   pronunciation?: string;
   legalNote?: LegalEnglishNote;
+  lookupStats?: LookupStats;
+  isImportant: boolean;
+  lemma?: string;
+  partOfSpeech?: string;
+  questionQuality?: QuestionQuality;
+  retiredAt?: string;
+  retiredReason?: string;
+  lastAnswerSnapshot?: {
+    occurredAt: string;
+    result: VocabResult;
+    previousReviewState: ReviewState;
+    previousReviewEvent?: ReviewEvent;
+  };
   sourceText: string;
   createdAt: string;
   updatedAt: string;
@@ -41,7 +88,34 @@ export type VocabStore = {
   version: "v0.1";
   updatedAt: string;
   items: VocabItem[];
+  lastReviewEvent?: ReviewEvent;
+  activeQuestion?: QuizActivityEvent;
+  dailyReviewPlans?: Record<string, DailyReviewPlan>;
+  focusReviewRound?: FocusReviewRound;
+  lookupTrackingStartedAt?: string;
 };
+
+export type FocusReviewRound = {
+  id: string;
+  createdAt: string;
+  itemIds: string[];
+  attemptedItemIds: string[];
+  completedAt?: string;
+};
+
+export type ReviewEvent = {
+  itemId: string;
+  result: VocabResult;
+  wrongStreak: number;
+  occurredAt: string;
+};
+
+export type QuizActivityEvent = {
+  itemId: string;
+  occurredAt: string;
+};
+
+export type DailyReviewPlan = DailyPlanV2;
 
 export type ImportFailure = {
   line: number;
@@ -61,6 +135,12 @@ export type VocabReviewQuestion = {
   term: string;
   correctDefinition: string;
   options: string[];
+  phonetic?: string;
+  legalContext?: string;
+  examples: {
+    sentence: string;
+    translation?: string;
+  }[];
   reviewState: ReviewState;
 };
 
@@ -69,6 +149,13 @@ export type VocabReviewResponse = {
   canStart: boolean;
   reason?: string;
   questions: VocabReviewQuestion[];
+  focusProgress?: {
+    total: number;
+    roundId?: string;
+    attemptCount: number;
+    focusRoundItems: number;
+    attemptedItemIds: string[];
+  };
 };
 
 export type VocabStats = {
@@ -80,6 +167,7 @@ export type VocabStats = {
   reviewed: number;
   mastered: number;
   needsReview: number;
+  retired: number;
 };
 
 export type LearningStatus = {
@@ -87,13 +175,37 @@ export type LearningStatus = {
   todayAdded: number;
   dueToday: number;
   learningStreakDays: number;
+  dailyTestStreakDays: number;
+  dailyPlanTotal: number;
+  dailyPlanCompleted: number;
   masteryRate: number;
   mastered: number;
   total: number;
   repeatedWrong: number;
-  petState: "idle" | "due" | "encourage" | "focus";
+  petState: "idle" | "due" | "encourage" | "failure" | "focus";
   message: string;
   reviewUrl: string;
+  recentReview?: ReviewEvent;
+  activeQuestion?: QuizActivityEvent;
+};
+
+export type DailyPlanCalendarStatus = "complete" | "partial" | "empty";
+
+export type DailyPlanCalendarDay = {
+  date: string;
+  status: DailyPlanCalendarStatus;
+  total: number;
+  completed: number;
+  progress: number;
+  hasPlan: boolean;
+};
+
+export type DailyPlanCalendar = {
+  generatedAt: string;
+  today: string;
+  month: string;
+  recentDays: DailyPlanCalendarDay[];
+  monthDays: DailyPlanCalendarDay[];
 };
 
 export type QualityBackfillResult = {
@@ -104,9 +216,42 @@ export type QualityBackfillResult = {
   saved: number;
 };
 
+export type FeedbackEnrichmentResult = {
+  dryRun: boolean;
+  requested: number;
+  enriched: number;
+  partial: number;
+  unchanged: number;
+  failed: number;
+  items: {
+    itemId: string;
+    term: string;
+    status: "enriched" | "partial" | "unchanged" | "failed";
+    addedFields: ("phonetic" | "legalContext" | "examples")[];
+    remainingFields?: ("phonetic" | "legalContext" | "examples")[];
+    reason?: string;
+  }[];
+};
+
+export type FeedbackEnrichmentAudit = {
+  generatedAt: string;
+  total: number;
+  complete: number;
+  missingAny: number;
+  missingPhonetic: number;
+  missingLegalContext: number;
+  missingExamples: number;
+  candidateItemIds: string[];
+};
+
 export type QualityActionResult = {
   item: VocabItem;
-  action: "marked-ok" | "rechecked" | "updated";
+  action: "marked-ok" | "rechecked" | "updated" | "retired";
+};
+
+export type QuestionIssueResult = {
+  item: VocabItem;
+  latestWrongExempted: boolean;
 };
 
 export type VocabItemUpdate = {
@@ -118,7 +263,7 @@ export type VocabItemUpdate = {
   pronunciation?: string;
 };
 
-export type ReviewMode = "due" | "all" | "wrong";
+export type ReviewMode = "due" | "all" | "wrong" | "focus";
 
 export type DictionaryEntry = {
   term: string;
@@ -132,6 +277,12 @@ export type DictionaryEntry = {
   pronunciation?: string;
   audioUrl?: string;
   legalNote?: LegalEnglishNote;
+};
+
+export type LookupEventInput = {
+  eventId: string;
+  source: LookupSource;
+  occurredAt?: string;
 };
 
 export type DictionaryLookupResult = DictionaryEntry & {
@@ -167,6 +318,15 @@ const emptyStore: VocabStore = {
   items: []
 };
 const dictionaryLookupCache = new Map<string, DictionaryEntry | null>();
+let dictionarySaveQueue: Promise<void> = Promise.resolve();
+let feedbackEnrichmentQueue: Promise<void> = Promise.resolve();
+const queuedFeedbackItemIds = new Set<string>();
+const exhaustedFeedbackItemIds = new Set<string>();
+let feedbackEnrichmentWorkerStarted = false;
+const AUTO_ENRICH_BATCH_SIZE = 5;
+const AUTO_ENRICH_MAX_ATTEMPTS = 3;
+const AUTO_ENRICH_RETRY_BASE_MS = 2_000;
+const AUTO_ENRICH_SCAN_INTERVAL_MS = 30 * 60 * 1_000;
 
 const knownChineseDefinitions: Record<string, string> = {
   "maritime law": "海商法；海事法",
@@ -624,36 +784,61 @@ const legalEnglishNotes: Record<string, LegalEnglishNote> = {
   }
 };
 
-export async function getVocabItems(): Promise<{ items: VocabItem[]; stats: VocabStats }> {
+export type VocabDateContext = {
+  learningDate: string;
+  nextLearningDate: string;
+};
+
+export async function getVocabItems(): Promise<{
+  items: VocabItem[];
+  stats: VocabStats;
+  dateContext: VocabDateContext;
+}> {
   const store = await readStore();
+  const dateContext = getVocabDateContext();
   return {
     items: sortItems(store.items),
-    stats: getStats(store.items, todayKey())
+    stats: getStats(store.items, dateContext.learningDate),
+    dateContext
   };
 }
 
 export async function getLearningStatus(): Promise<LearningStatus> {
   const store = await readStore();
+  const activeItems = store.items.filter((item) => !item.retiredAt);
   const now = new Date();
-  const today = dateKey(now.toISOString());
-  const todayAdded = store.items.filter((item) => dateKey(item.createdAt) === today).length;
-  const dueToday = store.items.filter((item) => isDue(item, today)).length;
-  const mastered = store.items.filter((item) => item.reviewState.status === "mastered").length;
-  const repeatedWrong = store.items.filter((item) =>
+  const today = todayKey();
+  const todayAdded = activeItems.filter((item) => dateKey(item.createdAt) === today).length;
+  const rawDueToday = activeItems.filter((item) => isDue(item, today)).length;
+  const mastered = activeItems.filter((item) => item.reviewState.status === "mastered").length;
+  const repeatedWrong = activeItems.filter((item) =>
     item.reviewState.status !== "mastered"
-    && item.reviewState.lastResult === "wrong"
-    && item.reviewState.wrongCount >= 2
+    && item.reviewState.focus === true
   ).length;
-  const recentAnswer = [...store.items]
-    .filter((item) => item.reviewState.lastResult && item.updatedAt)
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
-  const recentAnswerAge = recentAnswer ? now.valueOf() - new Date(recentAnswer.updatedAt).valueOf() : Number.POSITIVE_INFINITY;
-  const isRecentAnswer = recentAnswerAge >= 0 && recentAnswerAge <= 5 * 60 * 1000;
+  const dailyPlan = store.dailyReviewPlans?.[today];
+  const dueToday = isDailyPlanV2Enabled() && dailyPlan?.version === 2
+    ? getFrozenPlanPendingIds(dailyPlan).length
+    : rawDueToday;
+  const recentReview = store.lastReviewEvent ?? inferLastReviewEvent(activeItems);
+  const activeQuestion = store.activeQuestion;
+  const activeQuestionAge = activeQuestion
+    ? now.valueOf() - new Date(activeQuestion.occurredAt).valueOf()
+    : Number.POSITIVE_INFINITY;
+  const isQuestionActive = activeQuestionAge >= 0 && activeQuestionAge <= 30 * 60 * 1000;
+  const recentAnswerAge = recentReview
+    ? now.valueOf() - new Date(recentReview.occurredAt).valueOf()
+    : Number.POSITIVE_INFINITY;
+  const recentAnswerWindow = recentReview?.result === "correct" ? 4_000 : 5 * 60 * 1000;
+  const isRecentAnswer = recentAnswerAge >= 0 && recentAnswerAge <= recentAnswerWindow;
 
   let petState: LearningStatus["petState"] = "idle";
-  if (isRecentAnswer && recentAnswer?.reviewState.lastResult === "wrong" && recentAnswer.reviewState.wrongCount >= 2) {
+  if (isQuestionActive) {
+    petState = "due";
+  } else if (isRecentAnswer && recentReview?.result === "wrong" && recentReview.wrongStreak >= 2) {
     petState = "focus";
-  } else if (isRecentAnswer && recentAnswer?.reviewState.lastResult === "correct") {
+  } else if (isRecentAnswer && recentReview?.result === "wrong") {
+    petState = "failure";
+  } else if (isRecentAnswer && recentReview?.result === "correct") {
     petState = "encourage";
   } else if (dueToday > 0) {
     petState = "due";
@@ -661,8 +846,9 @@ export async function getLearningStatus(): Promise<LearningStatus> {
 
   const message = {
     idle: todayAdded > 0 ? `今日新增 ${todayAdded}` : "拖图片查词",
-    due: `待复习 ${dueToday}`,
+    due: isQuestionActive ? "准备作答" : `待复习 ${dueToday}`,
     encourage: "答对了，继续！",
+    failure: "答错了，再记一下",
     focus: `重点复习 ${repeatedWrong || 1}`
   }[petState];
 
@@ -670,16 +856,75 @@ export async function getLearningStatus(): Promise<LearningStatus> {
     generatedAt: now.toISOString(),
     todayAdded,
     dueToday,
-    learningStreakDays: calculateLearningStreak(store.items, today),
-    masteryRate: store.items.length === 0 ? 0 : Math.round((mastered / store.items.length) * 100),
+    learningStreakDays: calculateLearningStreak(activeItems, today),
+    dailyTestStreakDays: calculateDailyTestStreak(store.dailyReviewPlans ?? {}, today),
+    dailyPlanTotal: dailyPlan?.dueItemIds.length ?? dueToday,
+    dailyPlanCompleted: dailyPlan?.completedItemIds.length ?? 0,
+    masteryRate: activeItems.length === 0 ? 0 : Math.round((mastered / activeItems.length) * 100),
     mastered,
-    total: store.items.length,
+    total: activeItems.length,
     repeatedWrong,
     petState,
     message,
+    recentReview: isRecentAnswer ? recentReview : undefined,
+    activeQuestion: isQuestionActive ? activeQuestion : undefined,
     reviewUrl: dueToday > 0
       ? "http://127.0.0.1:5174/?view=quiz"
       : "http://127.0.0.1:5174/"
+  };
+}
+
+export async function getDailyPlanCalendar(month?: string): Promise<DailyPlanCalendar> {
+  const store = await readStore();
+  const today = todayKey();
+  const selectedMonth = month || today.slice(0, 7);
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(selectedMonth)) {
+    throw new Error("月份格式应为 YYYY-MM。");
+  }
+
+  const plans = store.dailyReviewPlans ?? {};
+  const recentDays = Array.from({ length: 7 }, (_, index) => {
+    const date = addDays(today, index - 6);
+    return summarizeDailyPlanCalendarDay(date, plans[date]);
+  });
+  const monthDays = Array.from({ length: daysInMonth(selectedMonth) }, (_, index) => {
+    const date = `${selectedMonth}-${String(index + 1).padStart(2, "0")}`;
+    return summarizeDailyPlanCalendarDay(date, plans[date]);
+  });
+
+  return {
+    generatedAt: new Date().toISOString(),
+    today,
+    month: selectedMonth,
+    recentDays,
+    monthDays
+  };
+}
+
+export function summarizeDailyPlanCalendarDay(
+  date: string,
+  plan?: DailyReviewPlan
+): DailyPlanCalendarDay {
+  const dueIds = [...new Set(plan?.dueItemIds ?? [])];
+  const dueSet = new Set(dueIds);
+  const completed = [...new Set(plan?.completedItemIds ?? [])]
+    .filter((itemId) => dueSet.has(itemId))
+    .length;
+  const total = dueIds.length;
+  const progress = total > 0 ? completed / total : 0;
+  const status: DailyPlanCalendarStatus = total > 0 && completed >= total
+    ? "complete"
+    : total > 0 && progress >= 0.5
+      ? "partial"
+      : "empty";
+
+  return {
+    date,
+    status,
+    total,
+    completed,
+    progress: Math.round(progress * 100),
+    hasPlan: total > 0
   };
 }
 
@@ -723,6 +968,303 @@ export async function backfillVocabQuality(): Promise<QualityBackfillResult> {
   };
 }
 
+export async function getVocabFeedbackEnrichmentAudit(): Promise<FeedbackEnrichmentAudit> {
+  const store = await readStore();
+  const candidates = store.items.filter((item) => getMissingFeedbackFields(item).length > 0);
+  return {
+    generatedAt: new Date().toISOString(),
+    total: store.items.length,
+    complete: store.items.length - candidates.length,
+    missingAny: candidates.length,
+    missingPhonetic: store.items.filter((item) => getMissingFeedbackFields(item).includes("phonetic")).length,
+    missingLegalContext: store.items.filter((item) => getMissingFeedbackFields(item).includes("legalContext")).length,
+    missingExamples: store.items.filter((item) => getMissingFeedbackFields(item).includes("examples")).length,
+    candidateItemIds: candidates.map((item) => item.id)
+  };
+}
+
+export async function enrichVocabFeedbackDetails({
+  itemIds,
+  dryRun = true,
+  resolveEntry = fetchOpenAILegalDictionaryEntry
+}: {
+  itemIds: string[];
+  dryRun?: boolean;
+  resolveEntry?: (term: string) => Promise<DictionaryEntry | null>;
+}): Promise<FeedbackEnrichmentResult> {
+  const uniqueItemIds = [...new Set(itemIds.map((itemId) => itemId.trim()).filter(Boolean))];
+  if (uniqueItemIds.length === 0) {
+    throw new Error("请提供需要补全的词条。");
+  }
+  if (uniqueItemIds.length > 50) {
+    throw new Error("一次最多补全 50 个词条。");
+  }
+
+  const store = await readStore();
+  const itemsById = new Map(store.items.map((item) => [item.id, item]));
+  const resolvedEntries = new Map<string, DictionaryEntry>();
+  const results: FeedbackEnrichmentResult["items"] = [];
+  let enriched = 0;
+  let partial = 0;
+  let unchanged = 0;
+  let failed = 0;
+
+  for (const itemId of uniqueItemIds) {
+    const item = itemsById.get(itemId);
+    if (!item) {
+      failed += 1;
+      results.push({
+        itemId,
+        term: "",
+        status: "failed",
+        addedFields: [],
+        reason: "没有找到这个词条。"
+      });
+      continue;
+    }
+
+    const missingBefore = getMissingFeedbackFields(item);
+    const hasPhonetic = !missingBefore.includes("phonetic");
+    const hasLegalContext = !missingBefore.includes("legalContext");
+    const hasExamples = !missingBefore.includes("examples");
+    if (missingBefore.length === 0) {
+      unchanged += 1;
+      results.push({
+        itemId,
+        term: item.term,
+        status: "unchanged",
+        addedFields: []
+      });
+      continue;
+    }
+    if (isClearlyNonLegalReference(item.term, item.definition)
+        || /\b(?:not a standard english word|misspell(?:ing|ed))\b/i.test(item.definition)) {
+      failed += 1;
+      results.push({
+        itemId,
+        term: item.term,
+        status: "failed",
+        addedFields: [],
+        reason: "词条本身需要先检查，未生成法律语境或例句。"
+      });
+      continue;
+    }
+
+    const entry = await resolveEntry(item.term);
+    const entryContext = entry?.legalContext?.trim()
+      || entry?.legalNote?.contextExplanation.trim()
+      || "";
+    const entryExamples = entry?.legalNote?.examples
+      .filter((example) => example.sentence.trim())
+      ?? [];
+    if (!entry || !entryContext || entryExamples.length === 0) {
+      failed += 1;
+      results.push({
+        itemId,
+        term: item.term,
+        status: "failed",
+        addedFields: [],
+        reason: "未获得可靠的法律语境与例句，词条保持原样。"
+      });
+      continue;
+    }
+
+    const addedFields: ("phonetic" | "legalContext" | "examples")[] = [];
+    if (!hasPhonetic && (entry.phonetic || entry.pronunciation)) {
+      item.phonetic = entry.phonetic || entry.pronunciation;
+      item.pronunciation = entry.pronunciation || entry.phonetic;
+      addedFields.push("phonetic");
+    }
+    if (!hasLegalContext) {
+      item.legalContext = entryContext;
+      addedFields.push("legalContext");
+    }
+    if (!hasExamples) {
+      item.legalNote = mergeFeedbackLegalNote(item, entry, entryContext, entryExamples);
+      addedFields.push("examples");
+    }
+
+    if (addedFields.length === 0) {
+      failed += 1;
+      results.push({
+        itemId,
+        term: item.term,
+        status: "failed",
+        addedFields: [],
+        reason: "返回内容没有补齐当前缺失字段，词条保持原样。"
+      });
+      continue;
+    }
+
+    const remainingFields = getMissingFeedbackFields(item);
+    resolvedEntries.set(itemId, entry);
+    if (remainingFields.length > 0) {
+      partial += 1;
+    } else {
+      enriched += 1;
+    }
+    results.push({
+      itemId,
+      term: item.term,
+      status: remainingFields.length > 0 ? "partial" : "enriched",
+      addedFields,
+      remainingFields: remainingFields.length > 0 ? remainingFields : undefined,
+      reason: remainingFields.length > 0
+        ? "部分字段已补全，其余字段保持待补状态。"
+        : undefined
+    });
+  }
+
+  if (!dryRun && resolvedEntries.size > 0) {
+    // AI calls may take several seconds. Re-read immediately before applying so
+    // quiz, plan, and lookup activity that occurred while resolving is retained.
+    const latestStore = await readStore();
+    let applied = false;
+    for (const [itemId, entry] of resolvedEntries) {
+      const latestItem = latestStore.items.find((item) => item.id === itemId);
+      if (!latestItem) continue;
+      const missingFields = getMissingFeedbackFields(latestItem);
+      if (missingFields.includes("phonetic")) {
+        latestItem.phonetic = entry.phonetic || entry.pronunciation;
+        latestItem.pronunciation = entry.pronunciation || entry.phonetic;
+        applied = true;
+      }
+      const entryContext = entry.legalContext?.trim()
+        || entry.legalNote?.contextExplanation.trim()
+        || "";
+      if (missingFields.includes("legalContext") && entryContext) {
+        latestItem.legalContext = entryContext;
+        applied = true;
+      }
+      if (missingFields.includes("examples") && entry.legalNote?.examples.length) {
+        latestItem.legalNote = mergeFeedbackLegalNote(
+          latestItem,
+          entry,
+          entryContext,
+          entry.legalNote.examples
+        );
+        applied = true;
+      }
+    }
+    if (applied) {
+      latestStore.updatedAt = new Date().toISOString();
+      await writeStore(latestStore);
+    }
+  }
+
+  return {
+    dryRun,
+    requested: uniqueItemIds.length,
+    enriched,
+    partial,
+    unchanged,
+    failed,
+    items: results
+  };
+}
+
+function getMissingFeedbackFields(
+  item: Pick<VocabItem, "phonetic" | "pronunciation" | "legalContext" | "legalNote">
+): ("phonetic" | "legalContext" | "examples")[] {
+  const missing: ("phonetic" | "legalContext" | "examples")[] = [];
+  if (!String(item.phonetic || item.pronunciation || "").trim()) missing.push("phonetic");
+  if (!String(item.legalContext || item.legalNote?.contextExplanation || "").trim()) {
+    missing.push("legalContext");
+  }
+  const hasBilingualExample = item.legalNote?.examples.some((example) =>
+    Boolean(example.sentence.trim() && example.translation.trim())
+  );
+  if (!hasBilingualExample) missing.push("examples");
+  return missing;
+}
+
+export async function enrichCurrentDailyPlanFeedbackDetails(
+  dryRun = true
+): Promise<FeedbackEnrichmentResult> {
+  const store = await readStore();
+  const plan = store.dailyReviewPlans?.[todayKey()];
+  if (!plan || plan.version !== 2) {
+    throw new Error("今天还没有可补全的冻结计划。");
+  }
+  return enrichVocabFeedbackDetails({
+    itemIds: plan.dueItemIds,
+    dryRun
+  });
+}
+
+export function scheduleVocabFeedbackEnrichment(itemId: string): void {
+  const normalizedItemId = itemId.trim();
+  if (!normalizedItemId || !shouldAutoEnrichVocabFeedback()) return;
+  if (queuedFeedbackItemIds.has(normalizedItemId) || exhaustedFeedbackItemIds.has(normalizedItemId)) return;
+
+  queuedFeedbackItemIds.add(normalizedItemId);
+  feedbackEnrichmentQueue = feedbackEnrichmentQueue
+    .then(() => runQueuedFeedbackEnrichment(normalizedItemId))
+    .catch(() => undefined)
+    .finally(() => queuedFeedbackItemIds.delete(normalizedItemId));
+}
+
+export async function startVocabFeedbackEnrichmentWorker(): Promise<void> {
+  if (feedbackEnrichmentWorkerStarted || !shouldAutoEnrichVocabFeedback()) return;
+  feedbackEnrichmentWorkerStarted = true;
+  await scheduleNextFeedbackEnrichmentBatch();
+  const timer = setInterval(() => {
+    void scheduleNextFeedbackEnrichmentBatch();
+  }, AUTO_ENRICH_SCAN_INTERVAL_MS);
+  timer.unref();
+}
+
+export async function drainVocabFeedbackEnrichmentQueue(): Promise<void> {
+  await feedbackEnrichmentQueue;
+}
+
+async function scheduleNextFeedbackEnrichmentBatch(): Promise<void> {
+  const audit = await getVocabFeedbackEnrichmentAudit();
+  audit.candidateItemIds
+    .filter((itemId) => !queuedFeedbackItemIds.has(itemId) && !exhaustedFeedbackItemIds.has(itemId))
+    .slice(0, AUTO_ENRICH_BATCH_SIZE)
+    .forEach(scheduleVocabFeedbackEnrichment);
+}
+
+async function runQueuedFeedbackEnrichment(itemId: string): Promise<void> {
+  for (let attempt = 1; attempt <= AUTO_ENRICH_MAX_ATTEMPTS; attempt += 1) {
+    const result = await enrichVocabFeedbackDetails({ itemIds: [itemId], dryRun: false });
+    const itemResult = result.items[0];
+    if (itemResult?.status === "enriched" || itemResult?.status === "unchanged") {
+      void scheduleNextFeedbackEnrichmentBatch();
+      return;
+    }
+    if (attempt < AUTO_ENRICH_MAX_ATTEMPTS) {
+      await delay(AUTO_ENRICH_RETRY_BASE_MS * (2 ** (attempt - 1)));
+    }
+  }
+  exhaustedFeedbackItemIds.add(itemId);
+  void scheduleNextFeedbackEnrichmentBatch();
+}
+
+function mergeFeedbackLegalNote(
+  item: VocabItem,
+  entry: DictionaryEntry,
+  legalContext: string,
+  examples: LegalEnglishNote["examples"]
+): LegalEnglishNote {
+  const existing = item.legalNote;
+  const incoming = entry.legalNote;
+  return {
+    chineseMeaning:
+      existing?.chineseMeaning
+      || incoming?.chineseMeaning
+      || item.chineseDefinition
+      || entry.chineseDefinition
+      || "",
+    legalRegister: existing?.legalRegister || incoming?.legalRegister || "法律英语",
+    contextExplanation: existing?.contextExplanation || legalContext,
+    pattern: existing?.pattern || incoming?.pattern,
+    examples,
+    comparison: existing?.comparison || incoming?.comparison
+  };
+}
+
 export async function importVocabText(text: string): Promise<ImportResult> {
   const parsed = parseVocabText(text);
   const store = await readStore();
@@ -735,16 +1277,21 @@ export async function importVocabText(text: string): Promise<ImportResult> {
   for (const entry of parsed.entries) {
     const normalized = normalizeTerm(entry.term);
     const existing = existingByTerm.get(normalized);
+    const termShapeIssue = getTermShapeIssue(entry.term);
 
     if (existing) {
       existing.term = entry.term;
       existing.definition = entry.definition;
       existing.chineseDefinition = entry.chineseDefinition || existing.chineseDefinition || getKnownChineseDefinition(entry.term);
       existing.legalContext = entry.legalContext || existing.legalContext;
-      existing.phonetic = entry.phonetic;
-      existing.pronunciation = entry.pronunciation;
-      existing.legalNote = entry.legalNote;
+      existing.phonetic = entry.phonetic || existing.phonetic;
+      existing.pronunciation = entry.pronunciation || existing.pronunciation;
+      existing.legalNote = entry.legalNote || existing.legalNote;
       existing.sourceText = entry.sourceText;
+      if (termShapeIssue) {
+        existing.questionQuality = pendingTermShapeQuality(termShapeIssue, now);
+        existing.lookupWarning = termShapeIssue;
+      }
       existing.updatedAt = now;
       importedItems.push(existing);
       updated += 1;
@@ -760,6 +1307,9 @@ export async function importVocabText(text: string): Promise<ImportResult> {
       phonetic: entry.phonetic,
       pronunciation: entry.pronunciation,
       legalNote: entry.legalNote,
+      questionQuality: termShapeIssue ? pendingTermShapeQuality(termShapeIssue, now) : undefined,
+      lookupStats: undefined,
+      isImportant: false,
       sourceText: entry.sourceText,
       createdAt: now,
       updatedAt: now,
@@ -773,6 +1323,7 @@ export async function importVocabText(text: string): Promise<ImportResult> {
 
   store.updatedAt = now;
   await writeStore(store);
+  importedItems.forEach((item) => scheduleVocabFeedbackEnrichment(item.id));
 
   return {
     imported,
@@ -796,7 +1347,7 @@ export async function lookupDictionaryTerm(term: string): Promise<DictionaryLook
       found: true,
       source: "online",
       lookupQuality: enrichedEntry.lookupQuality || "saved",
-      sourceLabel: enrichedEntry.sourceLabel || "Saved review item"
+      sourceLabel: enrichedEntry.sourceLabel || "已保存词条"
     };
   }
 
@@ -819,14 +1370,14 @@ export async function lookupDictionaryTerm(term: string): Promise<DictionaryLook
     found: true,
     source: "online",
     lookupQuality,
-    sourceLabel: enrichedEntry.sourceLabel || "Fallback dictionary",
+    sourceLabel: enrichedEntry.sourceLabel || "备用在线词典",
     lookupWarning: enrichedEntry.lookupWarning || getDefaultLookupWarning(lookupQuality)
   };
 }
 
 function getDefaultLookupWarning(quality?: DictionaryEntry["lookupQuality"]): string | undefined {
-  if (quality === "dictionary") return "This is a fallback definition. Legal meaning may need AI legal lookup.";
-  if (quality === "reference") return "This is a reference summary, not a concise dictionary definition.";
+  if (quality === "dictionary") return "当前为备用释义，法律含义可能需要进一步检索确认。";
+  if (quality === "reference") return "当前内容是参考摘要，并非精炼的词典释义。";
   return undefined;
 }
 
@@ -841,7 +1392,7 @@ async function findSavedDictionaryEntry(term: string): Promise<DictionaryEntry |
       chineseDefinition: builtInEntry.chineseDefinition || getKnownChineseDefinition(normalized),
       legalNote: builtInEntry.legalNote || getLegalEnglishNote(normalized),
       lookupQuality: "legal-glossary",
-      sourceLabel: "Built-in legal glossary"
+      sourceLabel: "法律术语表"
     };
   }
 
@@ -855,7 +1406,7 @@ async function findSavedDictionaryEntry(term: string): Promise<DictionaryEntry |
     chineseDefinition: existing.chineseDefinition || getKnownChineseDefinition(existing.term),
     legalContext: existing.legalContext || existing.legalNote?.contextExplanation,
     lookupQuality: "saved",
-    sourceLabel: "Saved review item",
+    sourceLabel: "已保存词条",
     phonetic: existing.phonetic,
     pronunciation: existing.pronunciation,
     legalNote: existing.legalNote
@@ -888,15 +1439,32 @@ async function updateStoredChineseDefinition(term: string, chineseDefinition: st
 export async function saveDictionaryTerm(term: string): Promise<SaveDictionaryEntryResult> {
   const entry = await fetchOnlineDictionaryEntry(term);
   if (!entry) {
-    throw new Error("Online dictionary term not found");
+    throw new Error("在线词典中没有找到这个词汇。");
   }
 
   return saveDictionaryEntry(entry);
 }
 
-export async function saveDictionaryEntry(entry: DictionaryEntry): Promise<SaveDictionaryEntryResult> {
+export async function saveDictionaryEntry(
+  entry: DictionaryEntry,
+  lookupEvent?: LookupEventInput
+): Promise<SaveDictionaryEntryResult> {
+  const saveOperation = dictionarySaveQueue.then(
+    () => saveDictionaryEntryNow(entry, lookupEvent),
+    () => saveDictionaryEntryNow(entry, lookupEvent)
+  );
+  dictionarySaveQueue = saveOperation.then(() => undefined, () => undefined);
+  const result = await saveOperation;
+  scheduleVocabFeedbackEnrichment(result.item.id);
+  return result;
+}
+
+async function saveDictionaryEntryNow(
+  entry: DictionaryEntry,
+  lookupEvent?: LookupEventInput
+): Promise<SaveDictionaryEntryResult> {
   if (isClearlyNonLegalReference(entry.term, entry.definition)) {
-    throw new Error("Lookup result does not look like a legal English term");
+    throw new Error("检索结果不像法律英语词汇，请检查拼写或换一个表达。");
   }
 
   const store = await readStore();
@@ -904,6 +1472,7 @@ export async function saveDictionaryEntry(entry: DictionaryEntry): Promise<SaveD
   const normalized = normalizeTerm(entry.term);
   const existing = store.items.find((item) => normalizeTerm(item.term) === normalized);
   const chineseDefinition = entry.chineseDefinition || await getChineseDefinition(entry.term, entry.definition);
+  const termShapeIssue = getTermShapeIssue(entry.term);
 
   if (existing) {
     existing.term = entry.term;
@@ -913,14 +1482,25 @@ export async function saveDictionaryEntry(entry: DictionaryEntry): Promise<SaveD
     existing.lookupQuality = entry.lookupQuality || existing.lookupQuality;
     existing.sourceLabel = entry.sourceLabel || existing.sourceLabel;
     existing.lookupWarning = entry.lookupWarning || existing.lookupWarning || getDefaultLookupWarning(existing.lookupQuality);
-    existing.phonetic = entry.phonetic;
-    existing.pronunciation = entry.pronunciation;
-    existing.legalNote = entry.legalNote;
+    existing.phonetic = entry.phonetic || existing.phonetic;
+    existing.pronunciation = entry.pronunciation || existing.pronunciation;
+    existing.legalNote = entry.legalNote || existing.legalNote;
+    if (termShapeIssue) {
+      existing.questionQuality = pendingTermShapeQuality(termShapeIssue, now);
+      existing.lookupWarning = termShapeIssue;
+    }
     existing.updatedAt = now;
     if (!existing.reviewState.nextReviewAt) {
       existing.reviewState = createTomorrowReviewState(now);
     }
+    const historicalCountKnown = existing.lookupStats?.historicalCountKnown
+      ?? wasCreatedAfterTrackingStarted(existing, store.lookupTrackingStartedAt);
+    const lookupRecorded = recordLookupEvent(existing, lookupEvent, historicalCountKnown, now);
+    existing.isImportant = isImportantItem(existing);
     store.updatedAt = now;
+    if (lookupRecorded && !store.lookupTrackingStartedAt) {
+      store.lookupTrackingStartedAt = now;
+    }
     await writeStore(store);
     return { item: existing, created: false };
   }
@@ -937,14 +1517,22 @@ export async function saveDictionaryEntry(entry: DictionaryEntry): Promise<SaveD
     phonetic: entry.phonetic,
     pronunciation: entry.pronunciation,
     legalNote: entry.legalNote,
+    questionQuality: termShapeIssue ? pendingTermShapeQuality(termShapeIssue, now) : undefined,
+    lookupStats: undefined,
+    isImportant: false,
     sourceText: entry.term,
     createdAt: now,
     updatedAt: now,
     reviewState: createTomorrowReviewState(now)
   };
+  const lookupRecorded = recordLookupEvent(item, lookupEvent, true, now);
+  item.isImportant = isImportantItem(item);
 
   store.items.push(item);
   store.updatedAt = now;
+  if (lookupRecorded && !store.lookupTrackingStartedAt) {
+    store.lookupTrackingStartedAt = now;
+  }
   await writeStore(store);
   return { item, created: true };
 }
@@ -953,13 +1541,19 @@ export async function markVocabQualityOk(itemId: string): Promise<QualityActionR
   const store = await readStore();
   const item = store.items.find((candidate) => candidate.id === itemId);
   if (!item) {
-    throw new Error("Vocabulary item not found");
+    throw new Error("没有找到这个词条。");
   }
+  assertTermCanEnterLearning(item.term);
 
   const now = new Date().toISOString();
   item.lookupQuality = "saved";
   item.sourceLabel = "Manually confirmed";
   item.lookupWarning = undefined;
+  item.questionQuality = {
+    status: "eligible",
+    reasons: ["用户已人工确认词义。"],
+    evaluatedAt: now
+  };
   item.updatedAt = now;
   store.updatedAt = now;
   await writeStore(store);
@@ -967,19 +1561,22 @@ export async function markVocabQualityOk(itemId: string): Promise<QualityActionR
   return { item, action: "marked-ok" };
 }
 
-export async function recheckVocabItem(itemId: string): Promise<QualityActionResult> {
+export async function recheckVocabItem(
+  itemId: string,
+  resolveEntry: (term: string) => Promise<DictionaryEntry | null> = fetchOnlineDictionaryEntry
+): Promise<QualityActionResult> {
   const store = await readStore();
   const item = store.items.find((candidate) => candidate.id === itemId);
   if (!item) {
-    throw new Error("Vocabulary item not found");
+    throw new Error("没有找到这个词条。");
   }
 
-  const entry = await fetchOnlineDictionaryEntry(item.term);
+  const entry = await resolveEntry(item.term);
   if (!entry) {
-    throw new Error("No updated dictionary result found");
+    throw new Error("暂未找到更可靠的在线释义。");
   }
   if (isClearlyNonLegalReference(entry.term, entry.definition)) {
-    throw new Error("Updated lookup result does not look like a legal English term");
+    throw new Error("新的检索结果不像法律英语词汇。");
   }
 
   const now = new Date().toISOString();
@@ -991,6 +1588,11 @@ export async function recheckVocabItem(itemId: string): Promise<QualityActionRes
   item.lookupQuality = entry.lookupQuality;
   item.sourceLabel = entry.sourceLabel;
   item.lookupWarning = entry.lookupWarning || getDefaultLookupWarning(entry.lookupQuality);
+  const termShapeIssue = getTermShapeIssue(entry.term);
+  item.questionQuality = termShapeIssue
+    ? pendingTermShapeQuality(termShapeIssue, now)
+    : questionQualityAfterRecheck(entry, now);
+  if (termShapeIssue) item.lookupWarning = termShapeIssue;
   item.phonetic = entry.phonetic;
   item.pronunciation = entry.pronunciation;
   item.legalNote = entry.legalNote;
@@ -1005,13 +1607,14 @@ export async function updateVocabItem(itemId: string, update: VocabItemUpdate): 
   const term = trimCell(update.term);
   const definition = cleanEnglishDefinition(update.definition);
   if (!term || !definition) {
-    throw new Error("term and English definition are required");
+    throw new Error("词汇和英文释义均不能为空。");
   }
+  assertTermCanEnterLearning(term);
 
   const store = await readStore();
   const item = store.items.find((candidate) => candidate.id === itemId);
   if (!item) {
-    throw new Error("Vocabulary item not found");
+    throw new Error("没有找到这个词条。");
   }
 
   const now = new Date().toISOString();
@@ -1024,6 +1627,11 @@ export async function updateVocabItem(itemId: string, update: VocabItemUpdate): 
   item.lookupQuality = "saved";
   item.sourceLabel = "Manually confirmed";
   item.lookupWarning = undefined;
+  item.questionQuality = {
+    status: "eligible",
+    reasons: ["用户已编辑并确认词义。"],
+    evaluatedAt: now
+  };
   item.updatedAt = now;
   store.updatedAt = now;
   await writeStore(store);
@@ -1033,6 +1641,10 @@ export async function updateVocabItem(itemId: string, update: VocabItemUpdate): 
 
 export async function deleteVocabItem(itemId: string): Promise<{ deleted: boolean }> {
   const store = await readStore();
+  const references = getVocabItemReferences(store, itemId);
+  if (references.length > 0) {
+    throw new Error(`这个词条仍被${references.join("、")}引用，不能直接删除。`);
+  }
   const nextItems = store.items.filter((item) => item.id !== itemId);
   if (nextItems.length === store.items.length) {
     return { deleted: false };
@@ -1044,15 +1656,223 @@ export async function deleteVocabItem(itemId: string): Promise<{ deleted: boolea
   return { deleted: true };
 }
 
-export async function getVocabReview(date = todayKey(), mode: ReviewMode = "due"): Promise<VocabReviewResponse> {
+export async function retireVocabItem(
+  itemId: string,
+  reason = "词条内容不适合继续用于学习或测试。"
+): Promise<QualityActionResult> {
   const store = await readStore();
-  const candidateItems = store.items
-    .filter((item) => {
-      if (mode === "all") return true;
-      if (mode === "wrong") return isWrongQueueItem(item);
-      return isDue(item, date);
-    })
-    .sort((a, b) => reviewPriority(a, date) - reviewPriority(b, date));
+  const item = store.items.find((candidate) => candidate.id === itemId);
+  if (!item) {
+    throw new Error("没有找到这个词条。");
+  }
+
+  const now = new Date().toISOString();
+  item.retiredAt = now;
+  item.retiredReason = reason;
+  item.questionQuality = {
+    status: "pending-review",
+    reasons: [reason],
+    evaluatedAt: now
+  };
+  item.lookupWarning = reason;
+  item.lastAnswerSnapshot = undefined;
+  item.reviewState = clearInvalidContentLearningSignals(item.reviewState);
+  item.updatedAt = now;
+
+  for (const plan of Object.values(store.dailyReviewPlans ?? {})) {
+    if (plan.completedItemIds.includes(itemId)) continue;
+    plan.dueItemIds = plan.dueItemIds.filter((candidate) => candidate !== itemId);
+    plan.reviewItemIds = plan.reviewItemIds?.filter((candidate) => candidate !== itemId);
+    plan.newItemIds = plan.newItemIds?.filter((candidate) => candidate !== itemId);
+    if (plan.dueItemIds.length > 0
+        && plan.dueItemIds.every((candidate) => plan.completedItemIds.includes(candidate))) {
+      plan.completedAt ??= now;
+    }
+  }
+
+  if (store.focusReviewRound?.itemIds.includes(itemId)) {
+    store.focusReviewRound.itemIds = store.focusReviewRound.itemIds.filter((candidate) => candidate !== itemId);
+    store.focusReviewRound.attemptedItemIds = store.focusReviewRound.attemptedItemIds
+      .filter((candidate) => candidate !== itemId);
+    if (store.focusReviewRound.itemIds.length === 0) {
+      store.focusReviewRound = undefined;
+    }
+  }
+  if (store.activeQuestion?.itemId === itemId) store.activeQuestion = undefined;
+  if (store.lastReviewEvent?.itemId === itemId) store.lastReviewEvent = undefined;
+
+  store.updatedAt = now;
+  await writeStore(store);
+  return { item, action: "retired" };
+}
+
+function clearInvalidContentLearningSignals(state: ReviewState): ReviewState {
+  return {
+    ...state,
+    wrongCount: 0,
+    wrongStreak: 0,
+    lastResult: undefined,
+    focus: false,
+    focusRecoveryCorrectCount: undefined,
+    focusRecoveryRoundId: undefined,
+    focusRoundAttempted: false,
+    focusRecoveryAttemptSessionId: undefined,
+    reinforcementPending: false,
+    reinforcementSessionId: undefined
+  };
+}
+
+export function getTermShapeIssue(term: string): string | undefined {
+  const cleanTerm = trimCell(term);
+  const words = cleanTerm.split(/\s+/).filter(Boolean);
+  if (cleanTerm.length > 100 || words.length > 12) {
+    return "这段文字过长，更像句子片段。请把词汇或固定法律短语单独保存。";
+  }
+  if (words.length >= 5 && /^(?:and|or|but|because|although|when|while|after|before|if|that)\b/i.test(cleanTerm)) {
+    return "这段文字以连接词开头，更像从正文截取的句子片段。请先编辑成独立词汇或法律短语。";
+  }
+  if (words.length >= 8 && /[,;:!?]/.test(cleanTerm)) {
+    return "这段文字包含句子标点，更像正文片段。请先编辑成独立词汇或法律短语。";
+  }
+  return undefined;
+}
+
+function assertTermCanEnterLearning(term: string): void {
+  const issue = getTermShapeIssue(term);
+  if (issue) throw new Error(issue);
+}
+
+function pendingTermShapeQuality(reason: string, evaluatedAt: string): QuestionQuality {
+  return {
+    status: "pending-review",
+    reasons: [reason],
+    evaluatedAt
+  };
+}
+
+function questionQualityAfterRecheck(entry: DictionaryEntry, evaluatedAt: string): QuestionQuality {
+  const trusted = entry.lookupQuality === "ai-legal" || entry.lookupQuality === "legal-glossary";
+  return trusted
+    ? {
+      status: "eligible",
+      reasons: ["已通过可靠法律词典来源重新检查。"],
+      evaluatedAt
+    }
+    : {
+      status: "pending-review",
+      reasons: ["重新检索仍未获得可靠的法律词典释义，请人工确认。"],
+      evaluatedAt
+    };
+}
+
+function getVocabItemReferences(store: VocabStore, itemId: string): string[] {
+  const references: string[] = [];
+  const referencedByPlan = Object.values(store.dailyReviewPlans ?? {}).some((plan) =>
+    plan.dueItemIds.includes(itemId)
+    || plan.reviewItemIds?.includes(itemId)
+    || plan.newItemIds?.includes(itemId)
+    || plan.completedItemIds.includes(itemId)
+  );
+  if (referencedByPlan) references.push("学习计划");
+  if (store.focusReviewRound?.itemIds.includes(itemId)) references.push("重点复习轮次");
+  if (store.activeQuestion?.itemId === itemId) references.push("当前题目");
+  return references;
+}
+
+function selectItemsById(itemIds: string[], items: VocabItem[]): VocabItem[] {
+  const byId = new Map(items.map((item) => [item.id, item]));
+  return itemIds.map((itemId) => byId.get(itemId)).filter((item): item is VocabItem => Boolean(item));
+}
+
+function ensureFocusReviewRound(
+  store: VocabStore,
+  restart: boolean
+): { round?: FocusReviewRound; changed: boolean } {
+  if (store.focusReviewRound && !restart) {
+    return { round: store.focusReviewRound, changed: false };
+  }
+
+  const focusItems = store.items.filter(isFocusQueueItem);
+  if (focusItems.length === 0) {
+    if (restart && store.focusReviewRound) {
+      store.focusReviewRound = undefined;
+      return { round: undefined, changed: true };
+    }
+    return { round: store.focusReviewRound, changed: false };
+  }
+
+  let roundId: string;
+  let attemptedItemIds: string[];
+  if (!restart) {
+    const roundCounts = new Map<string, number>();
+    focusItems.forEach((item) => {
+      const itemRoundId = item.reviewState.focusRecoveryRoundId;
+      if (itemRoundId) {
+        roundCounts.set(itemRoundId, (roundCounts.get(itemRoundId) ?? 0) + 1);
+      }
+    });
+    roundId = [...roundCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? randomUUID();
+    attemptedItemIds = focusItems
+      .filter((item) => item.reviewState.focusRecoveryRoundId === roundId && item.reviewState.focusRoundAttempted === true)
+      .map((item) => item.id);
+  } else {
+    roundId = randomUUID();
+    attemptedItemIds = [];
+  }
+
+  focusItems.forEach((item) => {
+    item.reviewState.focusRecoveryRoundId = roundId;
+    if (restart || !attemptedItemIds.includes(item.id)) {
+      item.reviewState.focusRoundAttempted = false;
+      item.reviewState.focusRecoveryAttemptSessionId = undefined;
+    }
+  });
+
+  const createdAt = new Date().toISOString();
+  store.focusReviewRound = {
+    id: roundId,
+    createdAt,
+    itemIds: focusItems.map((item) => item.id),
+    attemptedItemIds,
+    completedAt: attemptedItemIds.length >= focusItems.length ? createdAt : undefined
+  };
+  return { round: store.focusReviewRound, changed: true };
+}
+
+export async function getVocabReview(
+  date = todayKey(),
+  mode: ReviewMode = "due",
+  options: { restartFocusRound?: boolean } = {}
+): Promise<VocabReviewResponse> {
+  // Daily Plan v2 has one authoritative business date. A UTC-shifted or stale
+  // client date must never bypass the frozen plan and expose the full due pool.
+  if (isDailyPlanV2Enabled() && mode === "due") {
+    date = todayKey();
+  }
+  const store = await readStore();
+  const focusRoundResult = mode === "focus"
+    ? ensureFocusReviewRound(store, options.restartFocusRound === true)
+    : { round: undefined, changed: false };
+  const focusRound = focusRoundResult.round;
+  if (focusRoundResult.changed) {
+    await writeStore(store);
+  }
+
+  let dailyPlan = isDailyPlanV2Enabled() && mode === "due" && date === todayKey()
+    ? store.dailyReviewPlans?.[date]
+    : undefined;
+  const candidateItems = dailyPlan
+    ? selectFrozenPlanItems(dailyPlan, store.items)
+    : mode === "focus" && focusRound
+      ? selectItemsById(focusRound.itemIds, store.items)
+    : store.items
+      .filter((item) => {
+        if (mode === "all") return true;
+        if (mode === "wrong") return isWrongQueueItem(item);
+        if (mode === "focus") return isFocusQueueItem(item);
+        return isDue(item, date);
+      })
+      .sort((a, b) => reviewPriority(a, date) - reviewPriority(b, date));
 
   await repairDefinitionsForQuiz(store, candidateItems);
 
@@ -1070,29 +1890,50 @@ export async function getVocabReview(date = todayKey(), mode: ReviewMode = "due"
     return {
       date,
       canStart: false,
-      reason: "Need at least 4 vocabulary items with different definitions before starting a multiple-choice quiz.",
+      reason: "词库至少需要四个具有不同释义的词条，才能生成四选一测试。",
       questions: []
     };
   }
 
-  const dueItems = refreshedReviewableItems
-    .filter((item) => {
-      if (mode === "all") return true;
-      if (mode === "wrong") return isWrongQueueItem(item);
-      return isDue(item, date);
-    })
-    .sort((a, b) => reviewPriority(a, date) - reviewPriority(b, date));
+  if (isDailyPlanV2Enabled() && mode === "due" && date === todayKey()) {
+    const ensuredPlan = ensureDailyReviewPlan(store, date, new Date().toISOString());
+    dailyPlan = ensuredPlan.plan;
+    if (ensuredPlan.created) {
+      await writeStore(store);
+    }
+  }
+
+  const dueItems = dailyPlan
+    ? selectFrozenPlanItems(dailyPlan, refreshedReviewableItems)
+    : mode === "focus" && focusRound
+      ? selectItemsById(focusRound.itemIds, refreshedReviewableItems)
+    : refreshedReviewableItems
+      .filter((item) => {
+        if (mode === "all") return true;
+        if (mode === "wrong") return isWrongQueueItem(item);
+        if (mode === "focus") return isFocusQueueItem(item);
+        return isDue(item, date);
+      })
+      .sort((a, b) => reviewPriority(a, date) - reviewPriority(b, date));
 
   const emptyReason = {
-    all: "No vocabulary items are available for practice.",
-    due: "No vocabulary items are due for review today.",
-    wrong: "No wrong queue items are available for review."
+    all: "词库中暂时没有可练习的词。",
+    due: "今天的计划已经完成。",
+    wrong: "当前没有需要复习的错题。",
+    focus: "当前没有需要重点复习的词。"
   }[mode];
 
   return {
     date,
     canStart: dueItems.length > 0,
     reason: dueItems.length > 0 ? undefined : emptyReason,
+    focusProgress: mode === "focus" ? {
+      total: dueItems.length,
+      roundId: focusRound?.id,
+      attemptCount: focusRound?.attemptedItemIds.length ?? 0,
+      focusRoundItems: store.items.filter((item) => item.reviewState?.focus === true).length,
+      attemptedItemIds: focusRound?.attemptedItemIds ?? []
+    } : undefined,
     questions: dueItems.map((item) => createQuestion(item, refreshedReviewableItems, date))
   };
 }
@@ -1103,29 +1944,129 @@ export async function recordVocabAnswer(request: {
   correctDefinition: string;
   isCorrect: boolean;
   answeredAt?: string;
+  sessionId?: string;
+  focusRoundId?: string;
+  attemptKind?: "plan" | "reinforcement" | "independent";
 }): Promise<VocabItem> {
   const store = await readStore();
   const item = store.items.find((candidate) => candidate.id === request.itemId);
   if (!item) {
-    throw new Error("Vocabulary item not found");
+    throw new Error("没有找到这个词条。");
   }
 
   if (request.correctDefinition.trim() !== item.definition) {
-    throw new Error("Correct definition does not match this vocabulary item");
+    throw new Error("正确释义与当前词条不一致，请重新加载题目。");
   }
 
   const answeredAt = request.answeredAt ?? new Date().toISOString();
-  const answeredDate = dateKey(answeredAt);
-  const nextState = request.isCorrect
-    ? nextCorrectState(item.reviewState, answeredDate)
-    : nextWrongState(item.reviewState, answeredDate);
+  const answeredDate = learningDayKey(answeredAt);
+  const dailyPlan = ensureDailyReviewPlan(store, answeredDate, answeredAt).plan;
+  const isCorrect = request.selectedDefinition.trim() === item.definition;
+  const focusRound = request.attemptKind === "independent" && request.focusRoundId
+    ? store.focusReviewRound
+    : undefined;
+  if (request.focusRoundId) {
+    if (!focusRound || focusRound.id !== request.focusRoundId || !focusRound.itemIds.includes(item.id)) {
+      throw new Error("重点复习轮次已更新，请重新加载后继续。");
+    }
+    if (focusRound.attemptedItemIds.includes(item.id)) {
+      return item;
+    }
+  }
+  const nextState = applyAnswerLearningState(item.reviewState, {
+    isCorrect,
+    answeredDate,
+    sessionId: request.sessionId,
+    focusRoundId: request.focusRoundId,
+    attemptKind: request.attemptKind ?? "plan"
+  });
 
+  item.lastAnswerSnapshot = {
+    occurredAt: answeredAt,
+    result: isCorrect ? "correct" : "wrong",
+    previousReviewState: { ...item.reviewState },
+    previousReviewEvent: store.lastReviewEvent ? { ...store.lastReviewEvent } : undefined
+  };
   item.reviewState = nextState;
   item.updatedAt = answeredAt;
   store.updatedAt = answeredAt;
+  store.lastReviewEvent = {
+    itemId: item.id,
+    result: isCorrect ? "correct" : "wrong",
+    wrongStreak: nextState.wrongStreak ?? 0,
+    occurredAt: answeredAt
+  };
+  store.activeQuestion = undefined;
+  completeDailyReviewTask(dailyPlan, item.id, answeredAt);
+  if (focusRound) {
+    focusRound.attemptedItemIds.push(item.id);
+    if (focusRound.attemptedItemIds.length >= focusRound.itemIds.length) {
+      focusRound.completedAt = answeredAt;
+    }
+  }
   await writeStore(store);
 
   return item;
+}
+
+export async function flagVocabQuestionIssue(
+  itemId: string,
+  reason = "用户反馈题目内容有问题。"
+): Promise<QuestionIssueResult> {
+  const store = await readStore();
+  const item = store.items.find((candidate) => candidate.id === itemId);
+  if (!item) {
+    throw new Error("没有找到这个词条。");
+  }
+
+  const now = new Date().toISOString();
+  const snapshot = item.lastAnswerSnapshot;
+  const canExemptLatestWrong = snapshot?.result === "wrong"
+    && store.lastReviewEvent?.itemId === item.id
+    && store.lastReviewEvent.result === "wrong"
+    && store.lastReviewEvent.occurredAt === snapshot.occurredAt;
+
+  if (canExemptLatestWrong) {
+    item.reviewState = { ...snapshot.previousReviewState };
+    store.lastReviewEvent = snapshot.previousReviewEvent
+      ? { ...snapshot.previousReviewEvent }
+      : undefined;
+  }
+  item.lastAnswerSnapshot = undefined;
+  item.questionQuality = {
+    status: "pending-review",
+    reasons: [reason],
+    evaluatedAt: now
+  };
+  item.updatedAt = now;
+  store.updatedAt = now;
+  await writeStore(store);
+
+  return { item, latestWrongExempted: canExemptLatestWrong };
+}
+
+export async function recordQuizQuestionStarted(request: {
+  itemId: string;
+  occurredAt?: string;
+}): Promise<QuizActivityEvent> {
+  const store = await readStore();
+  const item = store.items.find((candidate) => candidate.id === request.itemId);
+  if (!item) {
+    throw new Error("没有找到这个词条。");
+  }
+
+  const activity = {
+    itemId: item.id,
+    occurredAt: request.occurredAt ?? new Date().toISOString()
+  };
+  if (store.lastReviewEvent
+      && new Date(store.lastReviewEvent.occurredAt).valueOf() >= new Date(activity.occurredAt).valueOf()) {
+    return activity;
+  }
+  store.activeQuestion = activity;
+  store.updatedAt = activity.occurredAt;
+  await writeStore(store);
+  return activity;
 }
 
 export function parseVocabText(text: string): {
@@ -1145,7 +2086,7 @@ export function parseVocabText(text: string): {
       failed.push({
         line: number,
         text: line,
-        reason: "Expected `term - definition`, `term: definition`, CSV, or TSV."
+        reason: "请使用“词汇 - 释义”“词汇: 释义”、CSV 或 TSV 格式。"
       });
       continue;
     }
@@ -1154,7 +2095,7 @@ export function parseVocabText(text: string): {
       failed.push({
         line: number,
         text: line,
-        reason: "Both term and definition are required."
+        reason: "词汇和释义均不能为空。"
       });
       continue;
     }
@@ -1351,6 +2292,8 @@ function normalizeLine(line: string): string {
 }
 
 async function repairDefinitionsForQuiz(store: VocabStore, candidates: VocabItem[]): Promise<void> {
+  if (process.env.DISABLE_QUIZ_DEFINITION_REPAIR === "true") return;
+
   const repairTargets = candidates.filter((item) => !hasEnglishDefinition(item));
   if (repairTargets.length === 0) return;
 
@@ -1400,6 +2343,12 @@ function createQuestion(item: VocabItem, items: VocabItem[], date: string): Voca
     term: item.term,
     correctDefinition: item.definition,
     options: stableShuffle([item.definition, ...distractors], `${date}:${item.id}:options`),
+    phonetic: item.phonetic || item.pronunciation,
+    legalContext: item.legalContext || item.legalNote?.contextExplanation,
+    examples: item.legalNote?.examples.map((example) => ({
+      sentence: example.sentence,
+      translation: example.translation
+    })) ?? [],
     reviewState: item.reviewState
   };
 }
@@ -1424,6 +2373,7 @@ function nextCorrectState(current: ReviewState, answeredDate: string): ReviewSta
     status: interval >= MASTERED_INTERVAL_DAYS || correctStreak >= 4 ? "mastered" : "review",
     correctStreak,
     wrongCount: current.wrongCount,
+    wrongStreak: 0,
     memoryStrength,
     easeFactor,
     lastIntervalDays: interval,
@@ -1442,6 +2392,7 @@ function nextWrongState(current: ReviewState, answeredDate: string): ReviewState
     status: "learning",
     correctStreak: 0,
     wrongCount: current.wrongCount + 1,
+    wrongStreak: getWrongStreak(current) + 1,
     memoryStrength,
     easeFactor,
     lastIntervalDays: 1,
@@ -1450,6 +2401,77 @@ function nextWrongState(current: ReviewState, answeredDate: string): ReviewState
     nextReviewAt: addDays(answeredDate, 1),
     lastResult: "wrong"
   };
+}
+
+function applyAnswerLearningState(
+  current: ReviewState,
+  answer: {
+    isCorrect: boolean;
+    answeredDate: string;
+    sessionId?: string;
+    focusRoundId?: string;
+    attemptKind: "plan" | "reinforcement" | "independent";
+  }
+): ReviewState {
+  if (answer.attemptKind === "independent" && current.focus === true) {
+    const isSameRoundDuplicate = current.focusRecoveryRoundId != null
+      && Boolean(answer.focusRoundId)
+      && current.focusRecoveryAttemptSessionId === answer.focusRoundId;
+    if (isSameRoundDuplicate && current.focusRoundAttempted === true) {
+      return {
+        ...current,
+        lastReviewedAt: answer.answeredDate,
+        focusRoundAttempted: current.focusRoundAttempted,
+        focusRecoveryAttemptSessionId: current.focusRecoveryAttemptSessionId
+      };
+    }
+  }
+
+  const next = answer.isCorrect
+    ? nextCorrectState(current, answer.answeredDate)
+    : nextWrongState(current, answer.answeredDate);
+  const sessionId = answer.sessionId?.trim() || undefined;
+  const isMatchingReinforcement = answer.attemptKind === "reinforcement"
+    && current.reinforcementPending === true
+    && Boolean(sessionId)
+    && current.reinforcementSessionId === sessionId;
+
+  if (answer.isCorrect) {
+    if (current.focus === true && answer.attemptKind !== "reinforcement") {
+      const recoveryCount = (current.focusRecoveryCorrectCount ?? 0) + 1;
+      next.focus = recoveryCount < 2;
+      next.focusRecoveryCorrectCount = Math.min(recoveryCount, 2);
+      next.focusRoundAttempted = true;
+      next.focusRecoveryAttemptSessionId = answer.attemptKind === "independent"
+        ? answer.focusRoundId
+        : next.focusRecoveryAttemptSessionId;
+      next.focusRecoveryRoundId = answer.focusRoundId ?? current.focusRecoveryRoundId ?? next.focusRecoveryRoundId;
+      if (recoveryCount >= 2) {
+        next.focusRecoveryRoundId = undefined;
+        next.focusRoundAttempted = false;
+        next.focusRecoveryAttemptSessionId = undefined;
+      }
+    } else {
+      next.focus = current.focus === true;
+      next.focusRecoveryCorrectCount = current.focusRecoveryCorrectCount ?? 0;
+      next.focusRoundAttempted = current.focusRoundAttempted ?? false;
+      next.focusRecoveryAttemptSessionId = current.focusRecoveryAttemptSessionId;
+    }
+    next.reinforcementPending = false;
+    next.reinforcementSessionId = undefined;
+    return next;
+  }
+
+  next.focus = current.focus === true || isMatchingReinforcement;
+  next.focusRecoveryCorrectCount = 0;
+  next.focusRoundAttempted = true;
+  next.focusRecoveryAttemptSessionId = answer.focusRoundId ?? sessionId;
+  if (answer.attemptKind !== "reinforcement" && next.focus === true && !next.focusRecoveryRoundId) {
+    next.focusRecoveryRoundId = answer.focusRoundId ?? current.focusRecoveryRoundId;
+  }
+  next.reinforcementPending = !next.focus;
+  next.reinforcementSessionId = next.focus ? undefined : sessionId;
+  return next;
 }
 
 function nextEaseFactor(current: ReviewState, isCorrect: boolean): number {
@@ -1498,6 +2520,120 @@ function optionalPositiveNumber(value: unknown): number | undefined {
   return Number.isFinite(numberValue) && numberValue > 0 ? numberValue : undefined;
 }
 
+function optionalNonNegativeNumber(value: unknown): number | undefined {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) && numberValue >= 0 ? numberValue : undefined;
+}
+
+function getWrongStreak(state: ReviewState): number {
+  if (typeof state.wrongStreak === "number") return state.wrongStreak;
+  return state.lastResult === "wrong" ? Math.min(state.wrongCount, 2) : 0;
+}
+
+function normalizeReviewEvent(value: unknown): ReviewEvent | undefined {
+  const candidate = value as Partial<ReviewEvent> | undefined;
+  if (!candidate || typeof candidate.itemId !== "string" || !candidate.itemId) return undefined;
+  if (candidate.result !== "correct" && candidate.result !== "wrong") return undefined;
+  if (typeof candidate.occurredAt !== "string" || !candidate.occurredAt) return undefined;
+  return {
+    itemId: candidate.itemId,
+    result: candidate.result,
+    wrongStreak: optionalNonNegativeNumber(candidate.wrongStreak) ?? 0,
+    occurredAt: candidate.occurredAt
+  };
+}
+
+function normalizeQuizActivityEvent(value: unknown): QuizActivityEvent | undefined {
+  const candidate = value as Partial<QuizActivityEvent> | undefined;
+  if (!candidate || typeof candidate.itemId !== "string" || !candidate.itemId) return undefined;
+  if (typeof candidate.occurredAt !== "string" || !candidate.occurredAt) return undefined;
+  return {
+    itemId: candidate.itemId,
+    occurredAt: candidate.occurredAt
+  };
+}
+
+function normalizeDailyReviewPlans(value: unknown): Record<string, DailyReviewPlan> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const plans: Record<string, DailyReviewPlan> = {};
+  for (const [key, rawPlan] of Object.entries(value)) {
+    const candidate = rawPlan as Partial<DailyReviewPlan>;
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(candidate.date ?? "") ? candidate.date! : key;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+    const dueItemIds = uniqueStrings(candidate.dueItemIds);
+    const completedItemIds = uniqueStrings(candidate.completedItemIds)
+      .filter((itemId) => dueItemIds.includes(itemId));
+    const isComplete = dueItemIds.length > 0 && dueItemIds.every((itemId) => completedItemIds.includes(itemId));
+    plans[date] = {
+      version: candidate.version === 2 ? 2 : undefined,
+      date,
+      dueItemIds,
+      reviewItemIds: uniqueStrings(candidate.reviewItemIds)
+        .filter((itemId) => dueItemIds.includes(itemId)),
+      newItemIds: uniqueStrings(candidate.newItemIds)
+        .filter((itemId) => dueItemIds.includes(itemId)),
+      completedItemIds,
+      createdAt: typeof candidate.createdAt === "string" && candidate.createdAt
+        ? candidate.createdAt
+        : `${date}T12:00:00.000Z`,
+      completedAt: isComplete && typeof candidate.completedAt === "string"
+        ? candidate.completedAt
+        : undefined
+    };
+  }
+  return plans;
+}
+
+function uniqueStrings(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.filter((item): item is string => typeof item === "string" && Boolean(item)))];
+}
+
+function ensureDailyReviewPlan(
+  store: VocabStore,
+  date: string,
+  createdAt: string
+): { plan: DailyReviewPlan; created: boolean } {
+  store.dailyReviewPlans ??= {};
+  const existing = store.dailyReviewPlans[date];
+  if (existing) return { plan: existing, created: false };
+
+  const plan = isDailyPlanV2Enabled()
+    ? createDailyPlanV2(store.items.filter(hasEnglishDefinition), date, createdAt)
+    : {
+        date,
+        dueItemIds: store.items
+          .filter((item) => hasEnglishDefinition(item) && isDue(item, date))
+          .map((item) => item.id),
+        completedItemIds: [],
+        createdAt
+      };
+  store.dailyReviewPlans[date] = plan;
+  return { plan, created: true };
+}
+
+function completeDailyReviewTask(plan: DailyReviewPlan, itemId: string, completedAt: string): void {
+  if (!plan.dueItemIds.includes(itemId) || plan.completedItemIds.includes(itemId)) return;
+  plan.completedItemIds.push(itemId);
+  if (plan.dueItemIds.length > 0
+      && plan.dueItemIds.every((dueItemId) => plan.completedItemIds.includes(dueItemId))) {
+    plan.completedAt = completedAt;
+  }
+}
+
+function inferLastReviewEvent(items: VocabItem[]): ReviewEvent | undefined {
+  const item = [...items]
+    .filter((candidate) => candidate.reviewState.lastResult && candidate.updatedAt)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+  if (!item?.reviewState.lastResult) return undefined;
+  return {
+    itemId: item.id,
+    result: item.reviewState.lastResult,
+    wrongStreak: getWrongStreak(item.reviewState),
+    occurredAt: item.updatedAt
+  };
+}
+
 function optionalRetentionTarget(value: unknown): number {
   const numberValue = Number(value);
   return Number.isFinite(numberValue) && numberValue > 0 && numberValue < 1
@@ -1529,6 +2665,87 @@ function createTomorrowReviewState(now: string): ReviewState {
   };
 }
 
+const lookupSources = new Set<LookupSource>([
+  "web",
+  "extension-selection",
+  "extension-image",
+  "desktop-image"
+]);
+
+function recordLookupEvent(
+  item: VocabItem,
+  event: LookupEventInput | undefined,
+  historicalCountKnown: boolean,
+  fallbackOccurredAt: string
+): boolean {
+  const eventId = event?.eventId.trim();
+  if (!eventId || eventId.length > 160 || !event || !lookupSources.has(event.source)) return false;
+
+  const existingStats = item.lookupStats;
+  if (existingStats?.eventIds.includes(eventId)) return false;
+
+  const occurredAt = isValidIsoDate(event.occurredAt) ? event.occurredAt! : fallbackOccurredAt;
+  const sources = { ...(existingStats?.sources ?? {}) };
+  sources[event.source] = (sources[event.source] ?? 0) + 1;
+  item.lookupStats = {
+    count: (existingStats?.count ?? 0) + 1,
+    firstLookedUpAt: existingStats?.firstLookedUpAt ?? occurredAt,
+    lastLookedUpAt: occurredAt,
+    historicalCountKnown: existingStats?.historicalCountKnown ?? historicalCountKnown,
+    eventIds: [...(existingStats?.eventIds ?? []), eventId],
+    sources
+  };
+  return true;
+}
+
+function normalizeLookupStats(value: unknown): LookupStats | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const candidate = value as Partial<LookupStats>;
+  const count = Math.max(0, Math.floor(Number(candidate.count) || 0));
+  const eventIds = uniqueStrings(candidate.eventIds);
+  if (count === 0 || eventIds.length === 0) return undefined;
+
+  const firstLookedUpAt = isValidIsoDate(candidate.firstLookedUpAt)
+    ? candidate.firstLookedUpAt!
+    : new Date(0).toISOString();
+  const lastLookedUpAt = isValidIsoDate(candidate.lastLookedUpAt)
+    ? candidate.lastLookedUpAt!
+    : firstLookedUpAt;
+  const sources: Partial<Record<LookupSource, number>> = {};
+  for (const source of lookupSources) {
+    const sourceCount = Number(candidate.sources?.[source]);
+    if (Number.isFinite(sourceCount) && sourceCount > 0) {
+      sources[source] = Math.floor(sourceCount);
+    }
+  }
+
+  return {
+    count,
+    firstLookedUpAt,
+    lastLookedUpAt,
+    historicalCountKnown: candidate.historicalCountKnown === true,
+    eventIds,
+    sources
+  };
+}
+
+function isValidIsoDate(value: unknown): value is string {
+  return typeof value === "string" && Number.isFinite(new Date(value).valueOf());
+}
+
+function isImportantLookupStats(stats: LookupStats | undefined): boolean {
+  return (stats?.count ?? 0) >= 2;
+}
+
+function isImportantItem(item: Pick<VocabItem, "lookupStats">): boolean {
+  return isImportantLookupStats(item.lookupStats);
+}
+
+function wasCreatedAfterTrackingStarted(item: VocabItem, trackingStartedAt: string | undefined): boolean {
+  if (!isValidIsoDate(trackingStartedAt) || !isValidIsoDate(item.createdAt)) return false;
+  return new Date(item.createdAt).valueOf() >= new Date(trackingStartedAt).valueOf();
+}
+
 async function readStore(): Promise<VocabStore> {
   try {
     const raw = await readFile(getVocabPath(), "utf8");
@@ -1537,11 +2754,41 @@ async function readStore(): Promise<VocabStore> {
     return {
       version: "v0.1",
       updatedAt: parsed.updatedAt ?? "",
-      items: Array.isArray(parsed.items) ? parsed.items.map(normalizeItem).filter(Boolean) : []
+      items: Array.isArray(parsed.items) ? parsed.items.map(normalizeItem).filter(Boolean) : [],
+      lastReviewEvent: normalizeReviewEvent(parsed.lastReviewEvent),
+      activeQuestion: normalizeQuizActivityEvent(parsed.activeQuestion),
+      dailyReviewPlans: normalizeDailyReviewPlans(parsed.dailyReviewPlans),
+      focusReviewRound: normalizeFocusReviewRound(parsed.focusReviewRound),
+      lookupTrackingStartedAt: typeof parsed.lookupTrackingStartedAt === "string"
+        ? parsed.lookupTrackingStartedAt
+        : undefined
     };
   } catch {
     return { ...emptyStore, items: [] };
   }
+}
+
+function normalizeFocusReviewRound(value: unknown): FocusReviewRound | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const candidate = value as Partial<FocusReviewRound>;
+  const id = typeof candidate.id === "string" ? candidate.id.trim() : "";
+  const itemIds = Array.isArray(candidate.itemIds)
+    ? [...new Set(candidate.itemIds.filter((itemId): itemId is string => typeof itemId === "string" && Boolean(itemId.trim())))]
+    : [];
+  if (!id || !isValidIsoDate(candidate.createdAt) || itemIds.length === 0) return undefined;
+  const itemIdSet = new Set(itemIds);
+  const attemptedItemIds = Array.isArray(candidate.attemptedItemIds)
+    ? [...new Set(candidate.attemptedItemIds.filter(
+      (itemId): itemId is string => typeof itemId === "string" && itemIdSet.has(itemId)
+    ))]
+    : [];
+  return {
+    id,
+    createdAt: candidate.createdAt,
+    itemIds,
+    attemptedItemIds,
+    completedAt: isValidIsoDate(candidate.completedAt) ? candidate.completedAt : undefined
+  };
 }
 
 async function writeStore(store: VocabStore): Promise<void> {
@@ -1557,6 +2804,7 @@ function normalizeItem(item: unknown): VocabItem {
   const definition = cleanEnglishDefinition(String(candidate.definition || ""))
     || builtInEntry?.definition
     || "";
+  const lookupStats = normalizeLookupStats(candidate.lookupStats);
 
   return {
     id: String(candidate.id || randomUUID()),
@@ -1570,6 +2818,18 @@ function normalizeItem(item: unknown): VocabItem {
     phonetic: candidate.phonetic || builtInEntry?.phonetic,
     pronunciation: candidate.pronunciation || builtInEntry?.pronunciation,
     legalNote: candidate.legalNote || getLegalEnglishNote(term),
+    lookupStats,
+    isImportant: isImportantLookupStats(lookupStats),
+    lemma: typeof candidate.lemma === "string" ? candidate.lemma.trim() || undefined : undefined,
+    partOfSpeech: typeof candidate.partOfSpeech === "string"
+      ? candidate.partOfSpeech.trim().toLowerCase() || undefined
+      : undefined,
+    questionQuality: normalizeQuestionQuality(candidate.questionQuality),
+    retiredAt: isValidIsoDate(candidate.retiredAt) ? candidate.retiredAt : undefined,
+    retiredReason: typeof candidate.retiredReason === "string"
+      ? candidate.retiredReason.trim() || undefined
+      : undefined,
+    lastAnswerSnapshot: normalizeLastAnswerSnapshot(candidate.lastAnswerSnapshot),
     sourceText: String(candidate.sourceText || ""),
     createdAt: String(candidate.createdAt || new Date().toISOString()),
     updatedAt: String(candidate.updatedAt || new Date().toISOString()),
@@ -1577,28 +2837,71 @@ function normalizeItem(item: unknown): VocabItem {
       status: candidate.reviewState?.status ?? "new",
       correctStreak: Number(candidate.reviewState?.correctStreak ?? 0),
       wrongCount: Number(candidate.reviewState?.wrongCount ?? 0),
+      wrongStreak: optionalNonNegativeNumber(candidate.reviewState?.wrongStreak),
       memoryStrength: optionalPositiveNumber(candidate.reviewState?.memoryStrength),
       easeFactor: optionalPositiveNumber(candidate.reviewState?.easeFactor) ?? DEFAULT_EASE_FACTOR,
       lastIntervalDays: optionalPositiveNumber(candidate.reviewState?.lastIntervalDays),
       retentionTarget: optionalRetentionTarget(candidate.reviewState?.retentionTarget),
       lastReviewedAt: candidate.reviewState?.lastReviewedAt,
       nextReviewAt: candidate.reviewState?.nextReviewAt,
-      lastResult: candidate.reviewState?.lastResult
+      lastResult: candidate.reviewState?.lastResult,
+      focus: candidate.reviewState?.focus === true,
+      focusRecoveryCorrectCount: optionalNonNegativeNumber(candidate.reviewState?.focusRecoveryCorrectCount),
+      focusRecoveryRoundId: typeof candidate.reviewState?.focusRecoveryRoundId === "string"
+        ? candidate.reviewState.focusRecoveryRoundId
+        : undefined,
+      focusRoundAttempted: candidate.reviewState?.focusRoundAttempted === true,
+      focusRecoveryAttemptSessionId: typeof candidate.reviewState?.focusRecoveryAttemptSessionId === "string"
+        ? candidate.reviewState.focusRecoveryAttemptSessionId
+        : undefined,
+      reinforcementPending: candidate.reviewState?.reinforcementPending === true,
+      reinforcementSessionId: typeof candidate.reviewState?.reinforcementSessionId === "string"
+        ? candidate.reviewState.reinforcementSessionId
+        : undefined
     }
   };
 }
 
+function normalizeLastAnswerSnapshot(value: unknown): VocabItem["lastAnswerSnapshot"] {
+  if (!value || typeof value !== "object") return undefined;
+  const candidate = value as VocabItem["lastAnswerSnapshot"];
+  if (!candidate || !isValidIsoDate(candidate.occurredAt)) return undefined;
+  if (candidate.result !== "correct" && candidate.result !== "wrong") return undefined;
+  if (!candidate.previousReviewState || typeof candidate.previousReviewState !== "object") return undefined;
+  return {
+    occurredAt: candidate.occurredAt,
+    result: candidate.result,
+    previousReviewState: { ...candidate.previousReviewState },
+    previousReviewEvent: normalizeReviewEvent(candidate.previousReviewEvent)
+  };
+}
+
+function normalizeQuestionQuality(value: unknown): QuestionQuality | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const candidate = value as Partial<QuestionQuality>;
+  if (candidate.status !== "eligible" && candidate.status !== "pending-review") return undefined;
+  return {
+    status: candidate.status,
+    reasons: Array.isArray(candidate.reasons)
+      ? candidate.reasons.filter((reason): reason is string => typeof reason === "string" && Boolean(reason.trim()))
+      : undefined,
+    evaluatedAt: typeof candidate.evaluatedAt === "string" ? candidate.evaluatedAt : undefined
+  };
+}
+
 function getStats(items: VocabItem[], date: string): VocabStats {
+  const activeItems = items.filter((item) => !item.retiredAt);
   const tomorrow = addDays(date, 1);
   return {
-    total: items.length,
-    dueToday: items.filter((item) => hasEnglishDefinition(item) && isDue(item, date)).length,
-    tomorrow: items.filter((item) => item.reviewState.nextReviewAt === tomorrow).length,
-    wrong: items.filter(isWrongQueueItem).length,
-    learning: items.filter((item) => item.reviewState.status !== "mastered").length,
-    reviewed: items.filter((item) => Boolean(item.reviewState.lastReviewedAt)).length,
-    mastered: items.filter((item) => item.reviewState.status === "mastered").length,
-    needsReview: items.filter(needsDefinitionReview).length
+    total: activeItems.length,
+    dueToday: activeItems.filter((item) => hasEnglishDefinition(item) && isDue(item, date)).length,
+    tomorrow: activeItems.filter((item) => item.reviewState.nextReviewAt === tomorrow).length,
+    wrong: activeItems.filter(isWrongQueueItem).length,
+    learning: activeItems.filter((item) => item.reviewState.status !== "mastered").length,
+    reviewed: activeItems.filter((item) => Boolean(item.reviewState.lastReviewedAt)).length,
+    mastered: activeItems.filter((item) => item.reviewState.status === "mastered").length,
+    needsReview: activeItems.filter(needsDefinitionReview).length,
+    retired: items.length - activeItems.length
   };
 }
 
@@ -1620,7 +2923,32 @@ function calculateLearningStreak(items: VocabItem[], today: string): number {
   return streak;
 }
 
+export function calculateDailyTestStreak(
+  plans: Record<string, DailyReviewPlan>,
+  today: string
+): number {
+  const isCompleted = (date: string) => {
+    const plan = plans[date];
+    return Boolean(
+      plan?.completedAt
+      && plan.dueItemIds.length > 0
+      && plan.dueItemIds.every((itemId) => plan.completedItemIds.includes(itemId))
+    );
+  };
+
+  let cursor = isCompleted(today) ? today : addDays(today, -1);
+  let streak = 0;
+  while (isCompleted(cursor)) {
+    streak += 1;
+    cursor = addDays(cursor, -1);
+  }
+  return streak;
+}
+
 function needsDefinitionReview(item: VocabItem): boolean {
+  if (item.questionQuality) {
+    return item.questionQuality.status === "pending-review";
+  }
   return item.lookupQuality === "dictionary" || item.lookupQuality === "reference";
 }
 
@@ -1629,7 +2957,7 @@ function inferLegacyQuality(item: VocabItem): Pick<VocabItem, "lookupQuality" | 
   if (builtInEntry || item.legalNote) {
     return {
       lookupQuality: "legal-glossary",
-      sourceLabel: "Built-in legal glossary",
+      sourceLabel: "法律术语表",
       lookupWarning: undefined
     };
   }
@@ -1637,23 +2965,23 @@ function inferLegacyQuality(item: VocabItem): Pick<VocabItem, "lookupQuality" | 
   if (looksLikeReferenceFallback(item)) {
     return {
       lookupQuality: "reference",
-      sourceLabel: "Reference fallback",
-      lookupWarning: "This old entry looks like a reference summary or non-legal result. Review before using it in quizzes."
+      sourceLabel: "参考资料",
+      lookupWarning: "这个旧词条可能是参考摘要或非法律释义，请确认后再用于测试。"
     };
   }
 
   if (item.legalContext) {
     return {
       lookupQuality: "saved",
-      sourceLabel: "Saved review item",
+      sourceLabel: "已保存词条",
       lookupWarning: undefined
     };
   }
 
   return {
     lookupQuality: "dictionary",
-    sourceLabel: "Fallback dictionary",
-    lookupWarning: "This old entry was saved before quality tracking. Review its legal meaning before relying on it."
+    sourceLabel: "备用在线词典",
+    lookupWarning: "这个旧词条保存于质量检查启用之前，请确认其法律含义。"
   };
 }
 
@@ -1670,17 +2998,28 @@ function isWrongQueueItem(item: VocabItem): boolean {
   return item.reviewState.wrongCount > 0 && item.reviewState.status !== "mastered";
 }
 
+function isFocusQueueItem(item: VocabItem): boolean {
+  return item.reviewState.focus === true
+    && item.reviewState.status !== "mastered"
+    && hasEnglishDefinition(item);
+}
+
 function isDue(item: VocabItem, date: string): boolean {
   if (item.reviewState.status === "new") return true;
   if (!item.reviewState.nextReviewAt) return false;
   return item.reviewState.nextReviewAt <= date;
 }
 
+function isDailyPlanV2Enabled(): boolean {
+  return process.env.DAILY_PLAN_V2_ENABLED === "true";
+}
+
 function reviewPriority(item: VocabItem, date: string): number {
   if (item.reviewState.lastResult === "wrong") return 0;
   if (item.reviewState.nextReviewAt && item.reviewState.nextReviewAt < date) return 1;
-  if (item.reviewState.status === "new") return 2;
-  return 3;
+  if (!item.reviewState.lastReviewedAt && item.isImportant) return 2;
+  if (!item.reviewState.lastReviewedAt) return 3;
+  return 4;
 }
 
 function sortItems(items: VocabItem[]): VocabItem[] {
@@ -1691,8 +3030,17 @@ function uniqueDefinitions(items: VocabItem[]): string[] {
   return [...new Set(items.map((item) => item.definition.trim()).filter(isQuizDefinitionUsable))];
 }
 
+export function isVocabItemQuestionEligible(item: VocabItem): boolean {
+  return !item.retiredAt
+    && !needsDefinitionReview(item)
+    && Boolean(item.definition)
+    && !containsCjk(item.definition)
+    && isLikelyEnglishExplanation(item.definition)
+    && isQuizDefinitionUsable(item.definition);
+}
+
 function hasEnglishDefinition(item: VocabItem): boolean {
-  return Boolean(item.definition) && !containsCjk(item.definition) && isLikelyEnglishExplanation(item.definition) && isQuizDefinitionUsable(item.definition);
+  return isVocabItemQuestionEligible(item);
 }
 
 function isQuizDefinitionUsable(definition: string): boolean {
@@ -1834,6 +3182,10 @@ type OpenAILegalLookupPayload = {
   legalContext?: string;
   phonetic?: string;
   pronunciation?: string;
+  examples?: {
+    sentence?: string;
+    translation?: string;
+  }[];
 };
 
 async function fetchOnlineDictionaryEntry(term: string): Promise<DictionaryEntry | null> {
@@ -1863,7 +3215,7 @@ async function fetchOnlineDictionaryEntry(term: string): Promise<DictionaryEntry
       chineseDefinition: directEntry.chineseDefinition || getKnownChineseDefinition(normalizedTerm),
       legalNote: directEntry.legalNote || getLegalEnglishNote(normalizedTerm),
       lookupQuality: "legal-glossary" as const,
-      sourceLabel: "Built-in legal glossary"
+      sourceLabel: "法律术语表"
     };
     dictionaryLookupCache.set(cacheKey, entry);
     return entry;
@@ -1889,7 +3241,7 @@ async function fetchOnlineDictionaryEntry(term: string): Promise<DictionaryEntry
     return referenceEntry;
   }
   if (!response.ok) {
-    throw new Error(`Online dictionary lookup failed with status ${response.status}`);
+    throw new Error(`在线词典请求失败（状态码 ${response.status}）。`);
   }
 
   const payload = await response.json() as RemoteDictionaryEntry[];
@@ -1917,8 +3269,8 @@ async function fetchOnlineDictionaryEntry(term: string): Promise<DictionaryEntry
     definition,
     legalContext: legalNote?.contextExplanation,
     lookupQuality: "dictionary",
-    sourceLabel: "Fallback dictionary",
-    lookupWarning: "This is a fallback definition. Legal meaning may need AI legal lookup.",
+    sourceLabel: "备用在线词典",
+    lookupWarning: "当前为备用释义，法律含义可能需要进一步检索确认。",
     phonetic,
     pronunciation: phonetic,
     audioUrl,
@@ -1954,15 +3306,18 @@ async function fetchOpenAILegalDictionaryEntry(term: string): Promise<Dictionary
               "Return valid JSON only.",
               "Prefer the legal meaning of the term when it has a legal usage.",
               "If the term is not specifically legal, return the ordinary meaning in concise dictionary style.",
-              "Do not include examples, exam tips, long classroom explanations, Markdown, or extra keys.",
+              "Do not include exam tips, long classroom explanations, Markdown, citations, or extra keys.",
               "The English definition must be one concise sentence.",
               "The Chinese definition must be concise and match the legal meaning when applicable.",
-              "legalContext must be one short Chinese sentence explaining how this term is commonly understood in legal materials."
+              "legalContext must be one short Chinese sentence explaining how this term is commonly understood in legal materials.",
+              "phonetic must be IPA enclosed in forward slashes.",
+              "Return one concise, generic or hypothetical legal example using the exact term, plus an accurate Chinese translation.",
+              "Do not invent case names, statute names, section numbers, quotations, named parties, dates, holdings, or factual claims."
             ].join(" ")
           },
           {
             role: "user",
-            content: `Term: ${term}\nReturn JSON with exactly these keys: term, englishDefinition, chineseDefinition, legalContext, phonetic, pronunciation.`
+            content: `Term: ${term}\nReturn JSON with exactly these keys: term, englishDefinition, chineseDefinition, legalContext, phonetic, pronunciation, examples. examples must be an array with one object containing sentence and translation.`
           }
         ]
       })
@@ -1974,30 +3329,116 @@ async function fetchOpenAILegalDictionaryEntry(term: string): Promise<Dictionary
     const content = data.choices?.[0]?.message?.content;
     if (!content) return null;
 
-    const parsed = JSON.parse(content) as OpenAILegalLookupPayload;
-    const definition = cleanEnglishDefinition(String(parsed.englishDefinition || ""));
-    const chineseDefinition = String(parsed.chineseDefinition || "").trim();
-    const legalContext = String(parsed.legalContext || "").trim();
-    const returnedTerm = trimCell(String(parsed.term || term));
-
-    if (!returnedTerm || !definition || !chineseDefinition || !legalContext || containsCjk(definition)) {
-      return null;
-    }
-
-    return {
-      term: returnedTerm,
-      definition,
-      chineseDefinition,
-      legalContext,
-      lookupQuality: "ai-legal",
-      sourceLabel: "AI legal dictionary",
-      phonetic: emptyToUndefined(parsed.phonetic),
-      pronunciation: emptyToUndefined(parsed.pronunciation),
-      legalNote: getLegalEnglishNote(returnedTerm) || getLegalEnglishNote(term)
-    };
+    return parseOpenAILegalLookupPayload(term, JSON.parse(content) as OpenAILegalLookupPayload);
   } catch {
     return null;
   }
+}
+
+export function parseOpenAILegalLookupPayload(
+  requestedTerm: string,
+  parsed: OpenAILegalLookupPayload
+): DictionaryEntry | null {
+  const definition = cleanEnglishDefinition(String(parsed.englishDefinition || ""));
+  const chineseDefinition = String(parsed.chineseDefinition || "").trim();
+  const legalContext = String(parsed.legalContext || "").trim();
+  const returnedTerm = trimCell(String(parsed.term || requestedTerm));
+  const examples = normalizeAIFeedbackExamples(returnedTerm, parsed.examples);
+  const phonetic = normalizeIpa(parsed.phonetic) || normalizeIpa(parsed.pronunciation);
+
+  if (
+    !returnedTerm
+    || !returnedTermMatchesRequest(requestedTerm, returnedTerm)
+    || !definition
+    || !chineseDefinition
+    || !legalContext
+    || !phonetic
+    || containsCjk(definition)
+    || !containsCjk(chineseDefinition)
+    || !containsCjk(legalContext)
+    || examples.length === 0
+  ) {
+    return null;
+  }
+
+  const existingNote = getLegalEnglishNote(returnedTerm) || getLegalEnglishNote(requestedTerm);
+  return {
+    term: returnedTerm,
+    definition,
+    chineseDefinition,
+    legalContext,
+    lookupQuality: "ai-legal",
+    sourceLabel: "AI 法律词典",
+    phonetic,
+    pronunciation: phonetic,
+    legalNote: {
+      chineseMeaning: existingNote?.chineseMeaning || chineseDefinition,
+      legalRegister: existingNote?.legalRegister || "法律英语",
+      contextExplanation: legalContext,
+      pattern: existingNote?.pattern,
+      examples,
+      comparison: existingNote?.comparison
+    }
+  };
+}
+
+function returnedTermMatchesRequest(requestedTerm: string, returnedTerm: string): boolean {
+  const requested = normalizeTerm(requestedTerm);
+  const returned = normalizeTerm(returnedTerm);
+  if (requested === returned) return true;
+  return requested
+    .split(/\s*\/\s*/)
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .includes(returned);
+}
+
+function normalizeAIFeedbackExamples(
+  term: string,
+  examples: OpenAILegalLookupPayload["examples"]
+): LegalEnglishNote["examples"] {
+  if (!Array.isArray(examples)) return [];
+  const normalizedTerm = normalizeTerm(term);
+  const matchTerms = normalizedTerm
+    .replace(/\s*\([^)]*\)\s*$/, "")
+    .split(/\s*\/\s*/)
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  return examples
+    .map((example) => ({
+      sentence: String(example?.sentence || "").trim(),
+      translation: String(example?.translation || "").trim()
+    }))
+    .filter((example) =>
+      example.sentence.length >= 12
+      && example.sentence.length <= 260
+      && !containsCjk(example.sentence)
+      && containsCjk(example.translation)
+      && matchTerms.some((matchTerm) => normalizeTerm(example.sentence).includes(matchTerm))
+      && !looksLikeUnsupportedLegalFact(example.sentence, matchTerms)
+    )
+    .slice(0, 2);
+}
+
+function normalizeIpa(value: unknown): string | undefined {
+  const text = String(value || "").trim();
+  if (!/^\/[^/\n]{2,100}\/$/.test(text)) return undefined;
+  return text;
+}
+
+function looksLikeUnsupportedLegalFact(sentence: string, targetTerms: string[] = []): boolean {
+  const withoutTarget = targetTerms.reduce(
+    (value, term) => value.replace(new RegExp(escapeRegExp(term), "gi"), ""),
+    sentence
+  );
+  return /\d/.test(withoutTarget)
+    || /\b(?:v\.|versus|section|subsection|s\.)\s/i.test(withoutTarget)
+    || /\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b/.test(withoutTarget);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function shouldUseOpenAILegalLookup(): boolean {
@@ -2005,6 +3446,11 @@ function shouldUseOpenAILegalLookup(): boolean {
   if (flag === "false") return false;
   if (flag === "true") return Boolean(process.env.OPENAI_API_KEY);
   return Boolean(process.env.OPENAI_API_KEY);
+}
+
+function shouldAutoEnrichVocabFeedback(): boolean {
+  return process.env.AUTO_ENRICH_VOCAB_FEEDBACK === "true"
+    && shouldUseOpenAILegalLookup();
 }
 
 function emptyToUndefined(value: unknown): string | undefined {
@@ -2072,8 +3518,8 @@ async function fetchOnlineReferenceEntry(term: string): Promise<DictionaryEntry 
       definition,
       chineseDefinition: await getChineseReferenceDefinition(summary.title || title) || await getChineseDefinition(term, definition),
       lookupQuality: "reference",
-      sourceLabel: "Reference fallback",
-      lookupWarning: "This is a reference summary, not a concise dictionary definition.",
+      sourceLabel: "参考资料",
+      lookupWarning: "当前内容是参考摘要，并非精炼的词典释义。",
       legalNote: getLegalEnglishNote(term)
     };
   } catch {
@@ -2298,19 +3744,65 @@ function normalizeAudioUrl(value?: string): string | undefined {
 }
 
 function todayKey(): string {
-  return dateKey(new Date().toISOString());
+  return learningDayKey(new Date());
 }
 
 function dateKey(value: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   const date = new Date(value);
-  if (Number.isNaN(date.valueOf())) return todayKey();
-  return date.toISOString().slice(0, 10);
+  return Number.isNaN(date.valueOf()) ? todayKey() : formatDateInLegalVocabTimeZone(date);
+}
+
+export function learningDayKey(value: Date | string): string {
+  const date = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(date.valueOf())) {
+    return learningDayKey(new Date());
+  }
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: legalVocabTimeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const calendarDate = `${values.year}-${values.month}-${values.day}`;
+  return Number(values.hour) < 2 ? addDays(calendarDate, -1) : calendarDate;
+}
+
+export function getVocabDateContext(value: Date | string = new Date()): VocabDateContext {
+  const learningDate = learningDayKey(value);
+  return {
+    learningDate,
+    nextLearningDate: addDays(learningDate, 1)
+  };
+}
+
+function formatDateInLegalVocabTimeZone(date: Date): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: legalVocabTimeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
 }
 
 function addDays(date: string, days: number): string {
   const result = new Date(`${date}T00:00:00.000Z`);
   result.setUTCDate(result.getUTCDate() + days);
   return result.toISOString().slice(0, 10);
+}
+
+function daysInMonth(month: string): number {
+  const [year, monthNumber] = month.split("-").map(Number);
+  return new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 function getVocabPath(): string {

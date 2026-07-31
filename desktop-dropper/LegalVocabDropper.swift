@@ -41,6 +41,8 @@ struct LearningStatus: Decodable {
   let petState: String
   let message: String
   let reviewUrl: String
+  let dailyPlanTotal: Int
+  let dailyPlanCompleted: Int
 }
 
 final class DropperAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
@@ -50,7 +52,7 @@ final class DropperAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
   func applicationDidFinishLaunching(_ notification: Notification) {
     NSApp.setActivationPolicy(.regular)
 
-    let size = NSSize(width: 194, height: 260)
+    let size = NSSize(width: 238, height: 260)
     let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1280, height: 800)
     let origin = savedWindowOrigin(fallback: NSPoint(x: screenFrame.maxX - size.width - 32, y: screenFrame.minY + 110))
     let window = NSWindow(
@@ -128,6 +130,8 @@ func saveWindowOrigin(_ origin: NSPoint) {
 enum PetMood: String, CaseIterable, Hashable {
   case idle
   case curious
+  case walkLeft
+  case walkRight
   case ready
   case working
   case success
@@ -149,6 +153,32 @@ func previewMoodFromArguments(_ arguments: [String] = CommandLine.arguments) -> 
 private let idlePrompt = "有不会的单词吗？"
 private let dragConfirmationPrompt = "放心交给我"
 private let unifiedStateFrameCount = 12
+private let recliningIdleFrameCount = 96
+private let naturalHoverFrameCount = 96
+private let walkingStateFrameCount = 8
+private let walkingDirectionThreshold: CGFloat = 1.5
+private let animationTickInterval: TimeInterval = 1.0 / 60.0
+private let naturalMotionFrameDuration: TimeInterval = 0.065
+private let standardFrameDuration: TimeInterval = 0.11
+
+func petFrameDuration(for mood: PetMood) -> TimeInterval {
+  switch mood {
+  case .idle, .curious:
+    return naturalMotionFrameDuration
+  default:
+    return standardFrameDuration
+  }
+}
+
+func directionalWalkingMood(for horizontalDelta: CGFloat) -> PetMood? {
+  if horizontalDelta > walkingDirectionThreshold {
+    return .walkRight
+  }
+  if horizontalDelta < -walkingDirectionThreshold {
+    return .walkLeft
+  }
+  return nil
+}
 
 func baselinePresentation(for status: LearningStatus) -> (mood: PetMood, message: String) {
   switch status.petState {
@@ -156,11 +186,28 @@ func baselinePresentation(for status: LearningStatus) -> (mood: PetMood, message
     return (.focus, "你有\(status.dueToday)个词需要复习哦")
   case "encourage":
     return (.success, status.message)
+  case "failure":
+    return (.failure, status.message)
   case "due":
     return (.ready, status.message)
   default:
     return (.idle, idlePrompt)
   }
+}
+
+func petPresentationFrame(for mood: PetMood, in bounds: NSRect) -> NSRect {
+  let availableHeight = bounds.height - 36
+  if mood == .idle {
+    return NSRect(x: 4, y: 32, width: bounds.width - 8, height: availableHeight)
+  }
+
+  let standardWidth = min(186, bounds.width - 8)
+  return NSRect(
+    x: (bounds.width - standardWidth) / 2,
+    y: 32,
+    width: standardWidth,
+    height: availableHeight
+  )
 }
 
 final class DropperView: NSView {
@@ -169,6 +216,7 @@ final class DropperView: NSView {
   private let messageBubble = NSTextField(labelWithString: idlePrompt)
   private let petAnimations = loadPetAnimations()
   private var frameTimer: Timer?
+  private var lastFrameTimestamp: TimeInterval = 0
   private var learningStatusTimer: Timer?
   private var currentFrameIndex = 0
   private var isBusy = false
@@ -180,6 +228,12 @@ final class DropperView: NSView {
   private var isTransitioning = false
   private var transitionGeneration = 0
   private let previewMood: PetMood?
+  private var isPointerInside = false
+  private var isWindowDragging = false
+  private var didMoveWindowDuringMouseDrag = false
+  private var dragStartMouseLocation = NSPoint.zero
+  private var dragStartWindowOrigin = NSPoint.zero
+  private var lastDragMouseLocation = NSPoint.zero
 
   init(frame frameRect: NSRect, previewMood: PetMood? = nil) {
     self.previewMood = previewMood
@@ -188,7 +242,7 @@ final class DropperView: NSView {
     layer?.backgroundColor = NSColor.clear.cgColor
     registerForDraggedTypes(draggedImageTypes)
 
-    let petFrame = NSRect(x: 4, y: 32, width: frameRect.width - 8, height: frameRect.height - 36)
+    let petFrame = petPresentationFrame(for: .idle, in: bounds)
     imageView.imageScaling = .scaleProportionallyUpOrDown
     imageView.image = petAnimations.frames(for: .idle).first
     imageView.frame = petFrame
@@ -214,7 +268,7 @@ final class DropperView: NSView {
     messageBubble.autoresizingMask = [.width, .maxYMargin]
     addSubview(messageBubble)
 
-    frameTimer = Timer.scheduledTimer(withTimeInterval: 0.11, repeats: true) { [weak self] _ in
+    frameTimer = Timer.scheduledTimer(withTimeInterval: animationTickInterval, repeats: true) { [weak self] _ in
       self?.showNextFrame()
     }
     if let previewMood {
@@ -222,7 +276,7 @@ final class DropperView: NSView {
       baselineMessage = "预览 · \(previewMood.rawValue)"
       renderBaseline()
     } else {
-      learningStatusTimer = Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { [weak self] _ in
+      learningStatusTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
         self?.refreshLearningStatus()
       }
       renderBaseline()
@@ -247,7 +301,51 @@ final class DropperView: NSView {
       openVocabUrl(preferredOpenUrl)
       return
     }
-    window?.performDrag(with: event)
+    guard let window else { return }
+    isWindowDragging = true
+    didMoveWindowDuringMouseDrag = false
+    dragStartMouseLocation = NSEvent.mouseLocation
+    lastDragMouseLocation = dragStartMouseLocation
+    dragStartWindowOrigin = window.frame.origin
+    renderHoverMood()
+  }
+
+  override func mouseDragged(with event: NSEvent) {
+    guard isWindowDragging, let window else { return }
+    let currentMouseLocation = NSEvent.mouseLocation
+    let totalDelta = NSPoint(
+      x: currentMouseLocation.x - dragStartMouseLocation.x,
+      y: currentMouseLocation.y - dragStartMouseLocation.y
+    )
+    if abs(totalDelta.x) > 0.5 || abs(totalDelta.y) > 0.5 {
+      didMoveWindowDuringMouseDrag = true
+      window.setFrameOrigin(NSPoint(
+        x: dragStartWindowOrigin.x + totalDelta.x,
+        y: dragStartWindowOrigin.y + totalDelta.y
+      ))
+    }
+
+    let horizontalDelta = currentMouseLocation.x - lastDragMouseLocation.x
+    if let walkingMood = directionalWalkingMood(for: horizontalDelta),
+       walkingMood != mood {
+      renderMood(walkingMood, message: "大王跟着你")
+    }
+    lastDragMouseLocation = currentMouseLocation
+  }
+
+  override func mouseUp(with event: NSEvent) {
+    guard isWindowDragging else { return }
+    isWindowDragging = false
+    if didMoveWindowDuringMouseDrag, let window {
+      saveWindowOrigin(window.frame.origin)
+    }
+    let localPoint = convert(event.locationInWindow, from: nil)
+    isPointerInside = bounds.contains(localPoint)
+    if isPointerInside {
+      renderHoverMood()
+    } else {
+      renderBaseline()
+    }
   }
 
   override func rightMouseDown(with event: NSEvent) {
@@ -258,6 +356,13 @@ final class DropperView: NSView {
     let reviewItem = NSMenuItem(title: "开始今日复习", action: #selector(openTodayReview), keyEquivalent: "")
     reviewItem.target = self
     menu.addItem(reviewItem)
+    let reminderItem = NSMenuItem(
+      title: DailyReviewReminderCoordinator.shared.menuTitle,
+      action: #selector(toggleDailyReminder),
+      keyEquivalent: ""
+    )
+    reminderItem.target = self
+    menu.addItem(reminderItem)
     menu.addItem(.separator())
     let quitItem = NSMenuItem(title: "让大王休息", action: #selector(quitPet), keyEquivalent: "q")
     quitItem.target = self
@@ -282,11 +387,13 @@ final class DropperView: NSView {
 
   override func mouseEntered(with event: NSEvent) {
     guard !isBusy else { return }
-    renderMood(.curious)
+    isPointerInside = true
+    renderHoverMood()
   }
 
   override func mouseExited(with event: NSEvent) {
-    guard !isBusy else { return }
+    isPointerInside = false
+    guard !isBusy, !isWindowDragging else { return }
     renderBaseline()
   }
 
@@ -385,6 +492,8 @@ final class DropperView: NSView {
       defaultMessage = idlePrompt
     case .curious:
       defaultMessage = "大王在这里"
+    case .walkLeft, .walkRight:
+      defaultMessage = "大王跟着你"
     case .ready:
       defaultMessage = dragConfirmationPrompt
     case .working:
@@ -407,21 +516,29 @@ final class DropperView: NSView {
     }
   }
 
+  private func renderHoverMood() {
+    renderMood(.curious)
+  }
+
   private func transitionToMood(_ mood: PetMood) {
     let frames = petAnimations.frames(for: mood)
     guard let incomingImage = frames.first else { return }
+    let incomingFrame = petPresentationFrame(for: mood, in: bounds)
 
     transitionGeneration += 1
     let generation = transitionGeneration
     currentFrameIndex = 0
+    lastFrameTimestamp = 0
 
     imageView.layer?.removeAllAnimations()
     transitionImageView.layer?.removeAllAnimations()
     if isTransitioning, let previousIncoming = transitionImageView.image {
       imageView.image = previousIncoming
+      imageView.frame = transitionImageView.frame
     }
     imageView.alphaValue = 1
     transitionImageView.image = incomingImage
+    transitionImageView.frame = incomingFrame
     transitionImageView.alphaValue = 0
     isTransitioning = true
 
@@ -434,6 +551,7 @@ final class DropperView: NSView {
       DispatchQueue.main.async {
         guard let self, self.transitionGeneration == generation else { return }
         self.imageView.image = incomingImage
+        self.imageView.frame = incomingFrame
         self.imageView.alphaValue = 1
         self.transitionImageView.alphaValue = 0
         self.transitionImageView.image = nil
@@ -476,7 +594,11 @@ final class DropperView: NSView {
     baselineMood = presentation.mood
     baselineMessage = presentation.message
     preferredOpenUrl = URL(string: status.reviewUrl) ?? webBaseUrl
-    if !isBusy && mood != .curious {
+    DailyReviewReminderCoordinator.shared.sync(
+      planTotal: status.dailyPlanTotal,
+      planCompleted: status.dailyPlanCompleted
+    )
+    if !isBusy && !isPointerInside && !isWindowDragging {
       renderBaseline()
     }
   }
@@ -493,6 +615,13 @@ final class DropperView: NSView {
     guard !isTransitioning else { return }
     let frames = petAnimations.frames(for: mood)
     guard !frames.isEmpty else { return }
+    let now = ProcessInfo.processInfo.systemUptime
+    if lastFrameTimestamp == 0 {
+      lastFrameTimestamp = now
+      return
+    }
+    guard now - lastFrameTimestamp >= petFrameDuration(for: mood) else { return }
+    lastFrameTimestamp = now
     currentFrameIndex = (currentFrameIndex + 1) % frames.count
     imageView.image = frames[currentFrameIndex]
   }
@@ -505,6 +634,10 @@ final class DropperView: NSView {
     var components = URLComponents(url: webBaseUrl, resolvingAgainstBaseURL: false)!
     components.queryItems = [URLQueryItem(name: "view", value: "quiz")]
     openVocabUrl(components.url ?? webBaseUrl)
+  }
+
+  @objc private func toggleDailyReminder() {
+    DailyReviewReminderCoordinator.shared.toggle(from: window)
   }
 
   @objc private func quitPet() {
@@ -552,15 +685,15 @@ func loadPetAnimations() -> PetAnimations {
     }
   }
 
-  func named(_ prefix: String) -> [NSImage] {
-    (0..<unifiedStateFrameCount).compactMap { index in
+  func named(_ prefix: String, count: Int = unifiedStateFrameCount) -> [NSImage] {
+    (0..<count).compactMap { index in
       NSImage(contentsOf: dropperAssetsDir.appendingPathComponent("\(prefix)-frame-\(index).png"))
     }
   }
 
-  func resolved(_ prefix: String, fallback: [NSImage]) -> [NSImage] {
-    let frames = named(prefix)
-    return frames.count == unifiedStateFrameCount ? frames : fallback
+  func resolved(_ prefix: String, count: Int = unifiedStateFrameCount, fallback: [NSImage]) -> [NSImage] {
+    let frames = named(prefix, count: count)
+    return frames.count == count ? frames : fallback
   }
 
   let oldIdle = (0..<12).compactMap { index in
@@ -572,8 +705,26 @@ func loadPetAnimations() -> PetAnimations {
     sittingTailSource.indices.contains(index) ? sittingTailSource[index] : nil
   }
   return PetAnimations(framesByMood: [
-    .idle: resolved("state-idle-ball", fallback: idleFallback),
-    .curious: resolved("state-curious", fallback: row(3, count: 4)),
+    .idle: resolved(
+      "state-reclining-idle",
+      count: recliningIdleFrameCount,
+      fallback: idleFallback
+    ),
+    .curious: resolved(
+      "state-curious-dynamic",
+      count: naturalHoverFrameCount,
+      fallback: resolved("state-curious", fallback: row(3, count: 4))
+    ),
+    .walkLeft: resolved(
+      "state-walk-left",
+      count: walkingStateFrameCount,
+      fallback: row(2, count: walkingStateFrameCount)
+    ),
+    .walkRight: resolved(
+      "state-walk-right",
+      count: walkingStateFrameCount,
+      fallback: row(1, count: walkingStateFrameCount)
+    ),
     .ready: resolved("state-ready", fallback: row(6, count: 6)),
     .working: resolved("state-working", fallback: row(7, count: 6)),
     .success: resolved("state-success", fallback: row(8, count: 6)),
@@ -749,7 +900,9 @@ func runCodexPetSelfTest() throws {
     repeatedWrong: 2,
     petState: "focus",
     message: "ignored",
-    reviewUrl: webBaseUrl.absoluteString
+    reviewUrl: webBaseUrl.absoluteString,
+    dailyPlanTotal: 9,
+    dailyPlanCompleted: 0
   ))
   guard focusPresentation.mood == .focus,
         focusPresentation.message == "你有9个词需要复习哦" else {
@@ -760,12 +913,27 @@ func runCodexPetSelfTest() throws {
     repeatedWrong: 0,
     petState: "idle",
     message: "ignored",
-    reviewUrl: webBaseUrl.absoluteString
+    reviewUrl: webBaseUrl.absoluteString,
+    dailyPlanTotal: 0,
+    dailyPlanCompleted: 0
   ))
   guard idlePresentation.mood == .idle,
         idlePresentation.message == idlePrompt,
         dragConfirmationPrompt == "放心交给我" else {
     throw CodexPetSelfTestError(message: "The idle or image-drop Chinese prompt is incorrect.")
+  }
+  let failurePresentation = baselinePresentation(for: LearningStatus(
+    dueToday: 1,
+    repeatedWrong: 0,
+    petState: "failure",
+    message: "答错了，再记一下",
+    reviewUrl: webBaseUrl.absoluteString,
+    dailyPlanTotal: 1,
+    dailyPlanCompleted: 1
+  ))
+  guard failurePresentation.mood == .failure,
+        failurePresentation.message == "答错了，再记一下" else {
+    throw CodexPetSelfTestError(message: "The wrong-answer state does not map to the failure animation.")
   }
   for mood in PetMood.allCases {
     guard previewMoodFromArguments(["CodexPet", "--preview-state", mood.rawValue]) == mood,
@@ -779,6 +947,33 @@ func runCodexPetSelfTest() throws {
   guard unifiedStateFrameCount == 12 else {
     throw CodexPetSelfTestError(message: "The unified animation frame count is incorrect.")
   }
+  guard recliningIdleFrameCount == 96,
+        naturalHoverFrameCount == 96,
+        petFrameDuration(for: .idle) == naturalMotionFrameDuration,
+        petFrameDuration(for: .curious) == naturalMotionFrameDuration,
+        petFrameDuration(for: .ready) == standardFrameDuration else {
+    throw CodexPetSelfTestError(
+      message: "The accepted v3 frame counts or state-specific timing are incorrect."
+    )
+  }
+  guard walkingStateFrameCount == 8,
+        directionalWalkingMood(for: -4) == .walkLeft,
+        directionalWalkingMood(for: 4) == .walkRight,
+        directionalWalkingMood(for: 0.5) == nil else {
+    throw CodexPetSelfTestError(message: "Directional walking state selection is incorrect.")
+  }
+  let testBounds = NSRect(x: 0, y: 0, width: 238, height: 260)
+  let recliningFrame = petPresentationFrame(for: .idle, in: testBounds)
+  let interactionFrame = petPresentationFrame(for: .curious, in: testBounds)
+  guard recliningFrame.width == 230,
+        interactionFrame.width == 186,
+        recliningFrame.width > interactionFrame.width,
+        recliningFrame.midX == interactionFrame.midX else {
+    throw CodexPetSelfTestError(
+      message: "The reclining idle must be enlarged without changing interaction-state scale."
+    )
+  }
+  try runDailyReviewReminderSelfTest()
 
   let spritesheetUrl = dropperAssetsDir.appendingPathComponent("dawang-spritesheet.webp")
   guard let imageSource = CGImageSourceCreateWithURL(spritesheetUrl as CFURL, nil),
@@ -790,8 +985,10 @@ func runCodexPetSelfTest() throws {
   }
 
   let expectedFrameCounts: [PetMood: Int] = [
-    .idle: 12,
-    .curious: 12,
+    .idle: recliningIdleFrameCount,
+    .curious: naturalHoverFrameCount,
+    .walkLeft: 8,
+    .walkRight: 8,
     .ready: 12,
     .working: 12,
     .success: 12,
@@ -813,7 +1010,33 @@ func runCodexPetSelfTest() throws {
           frame.width == 300,
           frame.height == 352 else {
       throw CodexPetSelfTestError(
-        message: "Standing ball-kick idle frame \(index) is missing or invalid."
+        message: "Standing ball-kick fallback frame \(index) is missing or invalid."
+      )
+    }
+  }
+  for index in 0..<recliningIdleFrameCount {
+    let frameUrl = dropperAssetsDir.appendingPathComponent(
+      "state-reclining-idle-frame-\(index).png"
+    )
+    guard let frameSource = CGImageSourceCreateWithURL(frameUrl as CFURL, nil),
+          let frame = CGImageSourceCreateImageAtIndex(frameSource, 0, nil),
+          frame.width == 300,
+          frame.height == 208 else {
+      throw CodexPetSelfTestError(
+        message: "Reclining idle frame \(index) is missing or invalid."
+      )
+    }
+  }
+  for index in 0..<naturalHoverFrameCount {
+    let frameUrl = dropperAssetsDir.appendingPathComponent(
+      "state-curious-dynamic-frame-\(index).png"
+    )
+    guard let frameSource = CGImageSourceCreateWithURL(frameUrl as CFURL, nil),
+          let frame = CGImageSourceCreateImageAtIndex(frameSource, 0, nil),
+          frame.width == 300,
+          frame.height == 352 else {
+      throw CodexPetSelfTestError(
+        message: "Natural dynamic hover frame \(index) is missing or invalid."
       )
     }
   }
@@ -835,6 +1058,19 @@ func runCodexPetSelfTest() throws {
             frame.height == 352 else {
         throw CodexPetSelfTestError(
           message: "Unified animation frame \(prefix)-\(index) is missing or invalid."
+        )
+      }
+    }
+  }
+  for prefix in ["state-walk-left", "state-walk-right"] {
+    for index in 0..<walkingStateFrameCount {
+      let frameUrl = dropperAssetsDir.appendingPathComponent("\(prefix)-frame-\(index).png")
+      guard let frameSource = CGImageSourceCreateWithURL(frameUrl as CFURL, nil),
+            let frame = CGImageSourceCreateImageAtIndex(frameSource, 0, nil),
+            frame.width == 192,
+            frame.height == 208 else {
+        throw CodexPetSelfTestError(
+          message: "Directional walking frame \(prefix)-\(index) is missing or invalid."
         )
       }
     }
@@ -898,17 +1134,22 @@ struct CodexPetSelfTestError: LocalizedError {
   var errorDescription: String? { message }
 }
 
-if CommandLine.arguments.contains("--self-test") {
-  do {
-    try runCodexPetSelfTest()
-    exit(0)
-  } catch {
-    fputs("Codex Pet self-test failed: \(error.localizedDescription)\n", stderr)
-    exit(1)
+@main
+struct CodexPetApplication {
+  static func main() {
+    if CommandLine.arguments.contains("--self-test") {
+      do {
+        try runCodexPetSelfTest()
+        exit(0)
+      } catch {
+        fputs("Codex Pet self-test failed: \(error.localizedDescription)\n", stderr)
+        exit(1)
+      }
+    }
+
+    let app = NSApplication.shared
+    let delegate = DropperAppDelegate()
+    app.delegate = delegate
+    app.run()
   }
 }
-
-let app = NSApplication.shared
-let delegate = DropperAppDelegate()
-app.delegate = delegate
-app.run()

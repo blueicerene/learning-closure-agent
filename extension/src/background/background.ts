@@ -2,7 +2,6 @@ import type { CaptureMode, CaptureResponse, GoalTrack } from "../shared/types";
 
 const vocabAppBaseUrl = "http://127.0.0.1:5174/";
 const vocabSelectionMenuId = "lca-vocab-lookup-selection";
-const vocabReviewMenuId = "lca-vocab-open-review";
 
 chrome.runtime.onInstalled.addListener(() => {
   installContextMenus();
@@ -13,10 +12,6 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 chrome.contextMenus.onClicked.addListener((info) => {
-  if (info.menuItemId === vocabReviewMenuId) {
-    openTodayReview().catch(() => undefined);
-    return;
-  }
   if (info.menuItemId !== vocabSelectionMenuId) return;
 
   const selectedText = normalizeLookupText(info.selectionText || "");
@@ -31,7 +26,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       .then(() => sendResponse({ ok: true }))
       .catch((error) => sendResponse({
         ok: false,
-        error: error instanceof Error ? error.message : "Unable to open today review"
+        error: error instanceof Error ? error.message : "无法打开今日复习。"
       }));
     return true;
   }
@@ -42,7 +37,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       .catch((error) => {
         sendResponse({
           ok: false,
-          error: error instanceof Error ? error.message : "Unable to open image lookup"
+          error: error instanceof Error ? error.message : "无法打开图片识词。"
         });
       });
 
@@ -58,7 +53,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     .catch((error) => {
       sendResponse({
         ok: false,
-        error: error instanceof Error ? error.message : "Unable to capture active tab"
+        error: error instanceof Error ? error.message : "无法获取当前网页。"
       } satisfies CaptureResponse);
     });
 
@@ -66,20 +61,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 });
 
 function installContextMenus() {
-  chrome.contextMenus.remove(vocabSelectionMenuId, () => {
+  chrome.contextMenus.removeAll(() => {
     chrome.runtime.lastError;
     chrome.contextMenus.create({
       id: vocabSelectionMenuId,
-      title: "大王查词：%s",
+      title: "查词：%s",
       contexts: ["selection"]
-    });
-  });
-  chrome.contextMenus.remove(vocabReviewMenuId, () => {
-    chrome.runtime.lastError;
-    chrome.contextMenus.create({
-      id: vocabReviewMenuId,
-      title: "大王：开始今日复习",
-      contexts: ["page", "selection"]
     });
   });
 }
@@ -88,7 +75,7 @@ async function openImageLookup(message: unknown): Promise<{ ok: true; key: strin
   const payload = message as { name?: unknown; mimeType?: unknown; dataUrl?: unknown };
   const dataUrl = typeof payload.dataUrl === "string" ? payload.dataUrl : "";
   if (!dataUrl.startsWith("data:image/")) {
-    throw new Error("Drop an image file.");
+    throw new Error("请拖入图片文件。");
   }
 
   const key = `lca-image-lookup-${Date.now()}-${crypto.randomUUID()}`;
@@ -108,7 +95,11 @@ async function openImageLookup(message: unknown): Promise<{ ok: true; key: strin
 
 async function openLookupTerm(term: string) {
   await ensureVocabAppIsRunning();
-  await openOrReuseVocabAppTab(`${vocabAppBaseUrl}?term=${encodeURIComponent(term)}&autoLookup=1`);
+  const lookupEventId = crypto.randomUUID();
+  await openOrReuseVocabAppTab(
+    `${vocabAppBaseUrl}?term=${encodeURIComponent(term)}`
+    + `&autoLookup=1&lookupSource=extension-selection&lookupEventId=${encodeURIComponent(lookupEventId)}`
+  );
 }
 
 async function openTodayReview() {
@@ -125,10 +116,10 @@ async function ensureVocabAppIsRunning() {
       fetch("http://127.0.0.1:3333/health", { cache: "no-store", signal: controller.signal })
     ]);
     if (responses.some((response) => !response.ok)) {
-      throw new Error("Unexpected local service response");
+      throw new Error("本地学习服务返回异常。");
     }
   } catch {
-    throw new Error("大王查词 is not running. Double-click 大王查词 on the Desktop, then try again.");
+    throw new Error("大王查词尚未运行。请双击桌面的“大王查词”，然后重试。");
   } finally {
     globalThis.clearTimeout(timeout);
   }
@@ -165,7 +156,7 @@ function normalizeLookupText(text: string): string {
 async function captureActiveTab(mode: CaptureMode, goal?: string, primaryGoalTrack?: GoalTrack, subject?: string): Promise<CaptureResponse> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab.id) {
-    throw new Error("No active tab found");
+    throw new Error("没有找到当前网页。");
   }
 
   await chrome.scripting.executeScript({
