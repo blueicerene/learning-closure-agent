@@ -26,17 +26,19 @@
       "id": "REL-02",
       "topic": "V2 产品定位与 GitHub 默认展示",
       "summary": "项目主定位更新为本地优先的法律英语查词与间隔复习工作台，包含网页/PDF/图片查词、每日计划、Chrome 学习工具和大王 macOS 桌宠；最初的学习收尾能力仅作为兼容模块保留。GitHub 默认分支 README、About 描述和扩展公开文案必须一致反映该定位。",
-      "route": "current_iteration",
+      "route": "already_verified",
       "owner": "PMO+Codex",
-      "delivery_state": "implementation_in_progress",
-      "acceptance_status": "user_confirmed_scope",
+      "delivery_state": "verified_on_real_path",
+      "acceptance_status": "passed",
       "user_observation": "用户于 2026-07-31 指出 GitHub About 和默认 README 仍在介绍最初的一键知识捕获/学习收尾产品，要求按已经结项的法律英语复习小程序 V2 同步修改。",
       "trigger_or_verification": "README、Project Charter、Security 与扩展公开文案完成定位扫描和构建验证；V2 以非破坏性合并进入 GitHub 默认 main；仓库 About 描述同步更新后再标记通过。",
       "evidence": [
         "README.md",
         "docs/PROJECT_CHARTER.md",
         "docs/SECURITY.md",
-        "extension/public/manifest.json"
+        "extension/public/manifest.json",
+        "artifacts/release-gate/v2-positioning-sync/verification.json",
+        "artifacts/release-gate/v2-positioning-sync/github-about.json"
       ],
       "contract_ids": ["v2-public-positioning"]
     },

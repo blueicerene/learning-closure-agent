@@ -1,0 +1,14 @@
+{
+  "checkedAt": "2026-07-31T19:51:52.795Z",
+  "passed": true,
+  "checks": {
+    "readme": true,
+    "charter": true,
+    "security": true,
+    "extensionManifest": true,
+    "extensionPopup": true,
+    "originMain": true,
+    "githubAbout": true
+  },
+  "failures": []
+}

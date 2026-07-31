@@ -23,14 +23,17 @@
       "summary": "README、About、Project Charter、Security 与扩展公开文案统一使用 V2 法律英语查词与间隔复习定位。",
       "state": "confirmed",
       "priority": "core",
-      "implemented": false,
-      "verified_on_real_path": false,
+      "implemented": true,
+      "verified_on_real_path": true,
       "verification_commands": ["node scripts/verify-v2-positioning-sync.mjs"],
       "required_evidence": [
         "artifacts/release-gate/v2-positioning-sync/verification.json",
         "artifacts/release-gate/v2-positioning-sync/github-about.json"
       ],
-      "evidence": []
+      "evidence": [
+        "artifacts/release-gate/v2-positioning-sync/verification.json",
+        "artifacts/release-gate/v2-positioning-sync/github-about.json"
+      ]
     }
   ],
   "real_path_checks": []

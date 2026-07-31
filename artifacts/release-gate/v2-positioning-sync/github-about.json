@@ -1,0 +1,7 @@
+{
+  "checkedAt": "2026-07-31T19:51:32Z",
+  "nameWithOwner": "blueicerene/learning-closure-agent",
+  "defaultBranch": "main",
+  "description": "Local-first legal English dictionary, OCR, bounded daily spaced-repetition plans, Chrome lookup tools, and the Da Wang macOS companion. Also, Dawang was my most beloved little cat. I hope he is happy in cat heaven. I will remember him forever.",
+  "source": "gh repo view blueicerene/learning-closure-agent --json description,defaultBranchRef,nameWithOwner"
+}
