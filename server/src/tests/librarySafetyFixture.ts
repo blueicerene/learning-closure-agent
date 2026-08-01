@@ -52,16 +52,16 @@ async function writeStore(overrides: Record<string, unknown> = {}) {
     updatedAt: now,
     items: [
       item("good-1", "estoppel", "A rule preventing a person from denying a prior representation relied upon by another.", {
-        lookupQuality: "legal-glossary"
+        lookupQuality: "saved"
       }),
       item("good-2", "injunction", "A court order requiring a person to do or stop doing a specified act.", {
-        lookupQuality: "legal-glossary"
+        lookupQuality: "saved"
       }),
       item("good-3", "consideration", "Something of legal value exchanged to support the formation of a binding contract.", {
-        lookupQuality: "legal-glossary"
+        lookupQuality: "saved"
       }),
       item("good-4", "fiduciary duty", "A legal duty to act loyally and in good faith for another person's interests.", {
-        lookupQuality: "legal-glossary"
+        lookupQuality: "saved"
       }),
       item("legacy-pending", "The Prank Panel", "An American reality comedy television series that aired on ABC.", {
         lookupQuality: "reference"
@@ -115,8 +115,8 @@ async function run() {
   const trustedRecheck = await recheckVocabItem("legacy-pending", async () => ({
     term: "panel of judges",
     definition: "A group of judges assigned to hear and decide a case together.",
-    lookupQuality: "ai-legal",
-    sourceLabel: "AI 法律词典"
+    lookupQuality: "oxford",
+    sourceLabel: "Oxford Dictionaries API"
   }));
   assert.equal(trustedRecheck.item.questionQuality?.status, "eligible");
 
