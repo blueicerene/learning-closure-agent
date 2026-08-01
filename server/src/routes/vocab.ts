@@ -240,8 +240,13 @@ function parseLookupEvent(value: unknown): LookupEventInput | undefined {
   };
 }
 
-function isLookupQuality(value: unknown): value is "ai-legal" | "legal-glossary" | "saved" | "reference" | "dictionary" {
-  return value === "ai-legal"
+function isLookupQuality(
+  value: unknown
+): value is "oxford" | "cambridge" | "merriam-webster" | "ai-legal" | "legal-glossary" | "saved" | "reference" | "dictionary" {
+  return value === "oxford"
+    || value === "cambridge"
+    || value === "merriam-webster"
+    || value === "ai-legal"
     || value === "legal-glossary"
     || value === "saved"
     || value === "reference"
