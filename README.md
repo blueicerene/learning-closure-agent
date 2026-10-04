@@ -6,6 +6,24 @@ A local-first legal English learning workspace for bilingual dictionary lookup f
 
 当前主产品是法律英语查词与复习系统。最初的“学习收尾”能力仅作为兼容模块保留，不再是项目的主定位。词库、复习状态和学习记录默认留在本机。
 
+## Project at a glance
+
+**Problem:** legal English encountered during reading is easy to lose between lookup and later review.
+
+**Workflow:** webpage/PDF selection or screenshot OCR → bilingual legal dictionary → local wordbank → a frozen daily review plan → calendar, Mac reminders and the Da Wang companion. The documented calibration limits are 20 questions per day and up to 10 pending terms added to the plan.
+
+**Hands-on contribution and AI boundaries:** this is an AI-assisted personal workflow project. The public V2 record documents user review and acceptance of dictionary lookup, quizzes, wordbank behaviour, Mac reminders and the companion's animation. It does not establish sole authorship of the code, organizational adoption or measured productivity gains.
+
+**Validation and status:** [V2 baseline and acceptance record](docs/RELEASE_V2.md), closed on July 31, 2026. These are documented acceptance facts; this README update does not independently rerun application tests or establish an installable GitHub release binary.
+
+**Limitations:** vocabulary and learning state stay on the local machine by default. Online dictionary services and real LLM mode require network access; real LLM mode sends content to the configured API. iPhone iCloud reminder synchronization and duplicate-free behaviour still need device verification. Seven-day timing calibration remains a follow-up rather than a validated adjustment to the daily limits.
+
+For an example of the earlier learning-closure output, see [sample Markdown](examples/sample-learning-closure.md). The [v0.1/v0.2 retrospective](docs/PROJECT_RETROSPECTIVE.md) is historical; V2 is the current documented baseline.
+
+## Why Da Wang
+
+Da Wang was my most beloved little cat. This companion is dedicated to him, carrying his name into a gentler daily learning routine.
+
 ## V2 稳定基线
 
 - 在线法律英语查词，返回中文释义、英文释义、音标、法律语境与例句。
