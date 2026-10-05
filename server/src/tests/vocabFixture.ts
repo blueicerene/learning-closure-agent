@@ -18,7 +18,8 @@ import {
   recordQuizQuestionStarted,
   recordVocabAnswer,
   saveDictionaryEntry,
-  saveDictionaryTerm
+  saveDictionaryTerm,
+  updateVocabItem
 } from "../services/vocab.js";
 
 const tmpDir = path.join(os.tmpdir(), `legal-vocab-test-${Date.now()}`);
@@ -268,7 +269,7 @@ bad line without separator
 
   const backfill = await backfillVocabQuality();
   assert.equal(backfill.scanned, 2);
-  assert.equal(backfill.needsReview, 1);
+  assert.equal(backfill.needsReview, 2);
   const backfilledItems = (await getVocabItems()).items;
   assert.equal(backfilledItems.find((item) => item.id === "legacy-reference")?.lookupQuality, "reference");
   assert.equal(backfilledItems.find((item) => item.id === "legacy-legal")?.lookupQuality, "legal-glossary");
@@ -554,9 +555,11 @@ fiduciary duty: A duty to act loyally for another person's interests.
   const repairedReview = await getVocabReview("2026-07-18", "all");
   assert.equal(repairedReview.canStart, false);
   const repairedCustody = (await getVocabItems()).items.find((item) => item.term === "custody");
-  assert.equal(repairedCustody?.definition, "The state of being kept under legal restraint.");
-  assert.equal(repairedCustody?.lookupQuality, "dictionary");
-  await markVocabQualityOk(repairedCustody!.id);
+  assert.notEqual(repairedCustody?.definition, "The state of being kept under legal restraint.");
+  await updateVocabItem(repairedCustody!.id, {
+    term: "custody",
+    definition: "The state of being kept under legal restraint."
+  });
   const confirmedRepairReview = await getVocabReview("2026-07-18", "all");
   assert.equal(confirmedRepairReview.canStart, true);
   assert.equal(confirmedRepairReview.questions.length, 4);
@@ -948,6 +951,7 @@ function legacyItem(term: string, definition: string) {
     sourceText: `${term} - ${definition}`,
     createdAt: "2026-07-18T12:00:00.000Z",
     updatedAt: "2026-07-18T12:00:00.000Z",
+    lookupQuality: "saved",
     reviewState: {
       status: "new",
       correctStreak: 0,

@@ -403,6 +403,7 @@ function makeStoreItems(prefix: string, count: number, reviewed: boolean, date: 
     term: `${prefix} term ${index + 1}`,
     definition: `A distinct legal definition for ${prefix} candidate number ${index + 1}.`,
     sourceText: `${prefix} term ${index + 1}`,
+    lookupQuality: "saved",
     isImportant: Boolean(item.isImportant)
   }));
 }

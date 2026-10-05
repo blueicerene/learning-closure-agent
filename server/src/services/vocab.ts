@@ -14,6 +14,15 @@ const legalVocabTimeZone = process.env.LEGAL_VOCAB_TIME_ZONE || "America/Toronto
 export type VocabStatus = "new" | "learning" | "review" | "mastered";
 export type VocabResult = "correct" | "wrong";
 export type LookupSource = "web" | "extension-selection" | "extension-image" | "desktop-image";
+export type LookupQuality =
+  | "oxford"
+  | "cambridge"
+  | "merriam-webster"
+  | "ai-legal"
+  | "legal-glossary"
+  | "saved"
+  | "reference"
+  | "dictionary";
 
 export type LookupStats = {
   count: number;
@@ -59,7 +68,7 @@ export type VocabItem = {
   definition: string;
   chineseDefinition?: string;
   legalContext?: string;
-  lookupQuality?: "ai-legal" | "legal-glossary" | "saved" | "reference" | "dictionary";
+  lookupQuality?: LookupQuality;
   sourceLabel?: string;
   lookupWarning?: string;
   phonetic?: string;
@@ -270,7 +279,7 @@ export type DictionaryEntry = {
   definition: string;
   chineseDefinition?: string;
   legalContext?: string;
-  lookupQuality?: "ai-legal" | "legal-glossary" | "saved" | "reference" | "dictionary";
+  lookupQuality?: LookupQuality;
   sourceLabel?: string;
   lookupWarning?: string;
   phonetic?: string;
@@ -816,6 +825,10 @@ export async function getLearningStatus(): Promise<LearningStatus> {
     && item.reviewState.focus === true
   ).length;
   const dailyPlan = store.dailyReviewPlans?.[today];
+  if (dailyPlan && reconcileUnreviewableDailyPlanItems(dailyPlan, activeItems, now.toISOString())) {
+    store.updatedAt = now.toISOString();
+    await writeStore(store);
+  }
   const dueToday = isDailyPlanV2Enabled() && dailyPlan?.version === 2
     ? getFrozenPlanPendingIds(dailyPlan).length
     : rawDueToday;
@@ -1288,9 +1301,18 @@ export async function importVocabText(text: string): Promise<ImportResult> {
       existing.pronunciation = entry.pronunciation || existing.pronunciation;
       existing.legalNote = entry.legalNote || existing.legalNote;
       existing.sourceText = entry.sourceText;
+      existing.lookupQuality = "saved";
+      existing.sourceLabel = "Manually imported";
       if (termShapeIssue) {
         existing.questionQuality = pendingTermShapeQuality(termShapeIssue, now);
         existing.lookupWarning = termShapeIssue;
+      } else {
+        existing.questionQuality = {
+          status: "eligible",
+          reasons: ["用户已导入并确认词义。"],
+          evaluatedAt: now
+        };
+        existing.lookupWarning = undefined;
       }
       existing.updatedAt = now;
       importedItems.push(existing);
@@ -1304,10 +1326,18 @@ export async function importVocabText(text: string): Promise<ImportResult> {
       definition: entry.definition,
       chineseDefinition: entry.chineseDefinition,
       legalContext: entry.legalContext,
+      lookupQuality: "saved",
+      sourceLabel: "Manually imported",
       phonetic: entry.phonetic,
       pronunciation: entry.pronunciation,
       legalNote: entry.legalNote,
-      questionQuality: termShapeIssue ? pendingTermShapeQuality(termShapeIssue, now) : undefined,
+      questionQuality: termShapeIssue
+        ? pendingTermShapeQuality(termShapeIssue, now)
+        : {
+          status: "eligible",
+          reasons: ["用户已导入并确认词义。"],
+          evaluatedAt: now
+        },
       lookupStats: undefined,
       isImportant: false,
       sourceText: entry.sourceText,
@@ -1337,6 +1367,20 @@ export async function lookupDictionaryTerm(term: string): Promise<DictionaryLook
   const normalizedTerm = trimCell(term);
   const existingEntry = await findSavedDictionaryEntry(normalizedTerm);
   if (existingEntry) {
+    if (!isTrustedDefinitionQuality(existingEntry.lookupQuality) && hasStandardDictionaryLookupConfigured()) {
+      const standardEntry = await fetchStandardDictionaryEntry(normalizedTerm);
+      if (standardEntry) {
+        const enrichedStandardEntry = await ensureChineseDefinition(standardEntry);
+        return {
+          ...enrichedStandardEntry,
+          found: true,
+          source: "online",
+          lookupQuality: enrichedStandardEntry.lookupQuality || "dictionary",
+          sourceLabel: enrichedStandardEntry.sourceLabel || "标准词典"
+        };
+      }
+    }
+
     const enrichedEntry = await ensureChineseDefinition(existingEntry);
     if (!existingEntry.chineseDefinition && enrichedEntry.chineseDefinition) {
       await updateStoredChineseDefinition(existingEntry.term, enrichedEntry.chineseDefinition);
@@ -1376,25 +1420,28 @@ export async function lookupDictionaryTerm(term: string): Promise<DictionaryLook
 }
 
 function getDefaultLookupWarning(quality?: DictionaryEntry["lookupQuality"]): string | undefined {
-  if (quality === "dictionary") return "当前为备用释义，法律含义可能需要进一步检索确认。";
-  if (quality === "reference") return "当前内容是参考摘要，并非精炼的词典释义。";
+  if (isTrustedDefinitionQuality(quality)) return undefined;
+  const standardDictionaryStatus = hasStandardDictionaryLookupConfigured()
+    ? "未从 Oxford / Cambridge / Merriam-Webster 获取到标准词典释义"
+    : "尚未配置 Oxford / Cambridge / Merriam-Webster 官方 API";
+  if (quality === "dictionary") return `${standardDictionaryStatus}；当前为备用释义，请人工确认后再进入正式复习。`;
+  if (quality === "reference") return `${standardDictionaryStatus}；当前内容是参考摘要，并非精炼的词典释义，请人工确认。`;
+  if (quality === "ai-legal") return `${standardDictionaryStatus}；当前为 AI 辅助释义，请人工确认。`;
+  if (quality === "legal-glossary") return `${standardDictionaryStatus}；当前为内置法律术语表释义，请人工确认。`;
   return undefined;
+}
+
+function hasStandardDictionaryLookupConfigured(): boolean {
+  return Boolean(
+    (process.env.OXFORD_APP_ID && process.env.OXFORD_APP_KEY)
+    || (process.env.CAMBRIDGE_API_KEY && process.env.CAMBRIDGE_DICT_CODE)
+    || process.env.MERRIAM_WEBSTER_API_KEY
+  );
 }
 
 async function findSavedDictionaryEntry(term: string): Promise<DictionaryEntry | null> {
   const normalized = normalizeTerm(term);
   if (!normalized) return null;
-
-  const builtInEntry = getBuiltInEntry(normalized);
-  if (builtInEntry && shouldPreferBuiltInEntry(normalized)) {
-    return {
-      ...builtInEntry,
-      chineseDefinition: builtInEntry.chineseDefinition || getKnownChineseDefinition(normalized),
-      legalNote: builtInEntry.legalNote || getLegalEnglishNote(normalized),
-      lookupQuality: "legal-glossary",
-      sourceLabel: "法律术语表"
-    };
-  }
 
   const store = await readStore();
   const existing = store.items.find((item) => normalizeTerm(item.term) === normalized);
@@ -1405,8 +1452,9 @@ async function findSavedDictionaryEntry(term: string): Promise<DictionaryEntry |
     definition: existing.definition,
     chineseDefinition: existing.chineseDefinition || getKnownChineseDefinition(existing.term),
     legalContext: existing.legalContext || existing.legalNote?.contextExplanation,
-    lookupQuality: "saved",
-    sourceLabel: "已保存词条",
+    lookupQuality: existing.lookupQuality === "saved" || !existing.lookupQuality ? "saved" : existing.lookupQuality,
+    sourceLabel: existing.sourceLabel || "已保存词条",
+    lookupWarning: existing.lookupWarning || getDefaultLookupWarning(existing.lookupQuality),
     phonetic: existing.phonetic,
     pronunciation: existing.pronunciation,
     legalNote: existing.legalNote
@@ -1473,21 +1521,34 @@ async function saveDictionaryEntryNow(
   const existing = store.items.find((item) => normalizeTerm(item.term) === normalized);
   const chineseDefinition = entry.chineseDefinition || await getChineseDefinition(entry.term, entry.definition);
   const termShapeIssue = getTermShapeIssue(entry.term);
+  const effectiveLookupQuality = entry.lookupQuality || existing?.lookupQuality || "saved";
+  const needsStandardDictionaryConfirmation = !isTrustedDefinitionQuality(effectiveLookupQuality);
+  const qualityWarning = entry.lookupWarning || getDefaultLookupWarning(effectiveLookupQuality);
 
   if (existing) {
     existing.term = entry.term;
     existing.definition = entry.definition;
     existing.chineseDefinition = chineseDefinition || existing.chineseDefinition;
     existing.legalContext = entry.legalContext || existing.legalContext || entry.legalNote?.contextExplanation;
-    existing.lookupQuality = entry.lookupQuality || existing.lookupQuality;
+    existing.lookupQuality = effectiveLookupQuality;
     existing.sourceLabel = entry.sourceLabel || existing.sourceLabel;
-    existing.lookupWarning = entry.lookupWarning || existing.lookupWarning || getDefaultLookupWarning(existing.lookupQuality);
+    existing.lookupWarning = qualityWarning || existing.lookupWarning || getDefaultLookupWarning(existing.lookupQuality);
     existing.phonetic = entry.phonetic || existing.phonetic;
     existing.pronunciation = entry.pronunciation || existing.pronunciation;
     existing.legalNote = entry.legalNote || existing.legalNote;
     if (termShapeIssue) {
       existing.questionQuality = pendingTermShapeQuality(termShapeIssue, now);
       existing.lookupWarning = termShapeIssue;
+    } else if (needsStandardDictionaryConfirmation) {
+      existing.questionQuality = pendingStandardDictionaryQuality(now);
+      existing.lookupWarning = existing.lookupWarning || getDefaultLookupWarning(existing.lookupQuality);
+    } else {
+      existing.questionQuality = {
+        status: "eligible",
+        reasons: ["已通过标准词典或人工确认来源。"],
+        evaluatedAt: now
+      };
+      existing.lookupWarning = undefined;
     }
     existing.updatedAt = now;
     if (!existing.reviewState.nextReviewAt) {
@@ -1511,13 +1572,21 @@ async function saveDictionaryEntryNow(
     definition: entry.definition,
     chineseDefinition,
     legalContext: entry.legalContext || entry.legalNote?.contextExplanation,
-    lookupQuality: entry.lookupQuality,
+    lookupQuality: effectiveLookupQuality,
     sourceLabel: entry.sourceLabel,
-    lookupWarning: entry.lookupWarning || getDefaultLookupWarning(entry.lookupQuality),
+    lookupWarning: qualityWarning,
     phonetic: entry.phonetic,
     pronunciation: entry.pronunciation,
     legalNote: entry.legalNote,
-    questionQuality: termShapeIssue ? pendingTermShapeQuality(termShapeIssue, now) : undefined,
+    questionQuality: termShapeIssue
+      ? pendingTermShapeQuality(termShapeIssue, now)
+      : needsStandardDictionaryConfirmation
+        ? pendingStandardDictionaryQuality(now)
+        : {
+          status: "eligible",
+          reasons: ["已通过标准词典或人工确认来源。"],
+          evaluatedAt: now
+        },
     lookupStats: undefined,
     isImportant: false,
     sourceText: entry.term,
@@ -1750,17 +1819,32 @@ function pendingTermShapeQuality(reason: string, evaluatedAt: string): QuestionQ
   };
 }
 
+function isTrustedDefinitionQuality(quality?: LookupQuality): boolean {
+  return quality === "saved"
+    || quality === "oxford"
+    || quality === "cambridge"
+    || quality === "merriam-webster";
+}
+
+function pendingStandardDictionaryQuality(evaluatedAt: string): QuestionQuality {
+  return {
+    status: "pending-review",
+    reasons: ["未找到 Oxford / Cambridge / Merriam-Webster 标准词典释义，请人工确认后再进入正式复习。"],
+    evaluatedAt
+  };
+}
+
 function questionQualityAfterRecheck(entry: DictionaryEntry, evaluatedAt: string): QuestionQuality {
-  const trusted = entry.lookupQuality === "ai-legal" || entry.lookupQuality === "legal-glossary";
+  const trusted = isTrustedDefinitionQuality(entry.lookupQuality);
   return trusted
     ? {
       status: "eligible",
-      reasons: ["已通过可靠法律词典来源重新检查。"],
+      reasons: ["已通过标准词典或人工确认来源重新检查。"],
       evaluatedAt
     }
     : {
       status: "pending-review",
-      reasons: ["重新检索仍未获得可靠的法律词典释义，请人工确认。"],
+      reasons: ["重新检索仍未获得 Oxford / Cambridge / Merriam-Webster 标准词典释义，请人工确认。"],
       evaluatedAt
     };
 }
@@ -1898,7 +1982,9 @@ export async function getVocabReview(
   if (isDailyPlanV2Enabled() && mode === "due" && date === todayKey()) {
     const ensuredPlan = ensureDailyReviewPlan(store, date, new Date().toISOString());
     dailyPlan = ensuredPlan.plan;
-    if (ensuredPlan.created) {
+    const reconciled = reconcileUnreviewableDailyPlanItems(dailyPlan, refreshedReviewableItems, new Date().toISOString());
+    if (ensuredPlan.created || reconciled) {
+      store.updatedAt = new Date().toISOString();
       await writeStore(store);
     }
   }
@@ -2326,6 +2412,7 @@ async function repairDefinitionsForQuiz(store: VocabStore, candidates: VocabItem
 
 function hasUsableDictionaryDefinition(entry: DictionaryEntry): boolean {
   return Boolean(entry.definition)
+    && isTrustedDefinitionQuality(entry.lookupQuality)
     && !containsCjk(entry.definition)
     && isLikelyEnglishExplanation(entry.definition)
     && isQuizDefinitionUsable(entry.definition)
@@ -2619,6 +2706,32 @@ function completeDailyReviewTask(plan: DailyReviewPlan, itemId: string, complete
       && plan.dueItemIds.every((dueItemId) => plan.completedItemIds.includes(dueItemId))) {
     plan.completedAt = completedAt;
   }
+}
+
+function reconcileUnreviewableDailyPlanItems(
+  plan: DailyReviewPlan,
+  candidateItems: VocabItem[],
+  completedAt: string
+): boolean {
+  const reviewableIds = new Set(candidateItems.filter(hasEnglishDefinition).map((item) => item.id));
+  const completedIds = new Set(plan.completedItemIds);
+  let changed = false;
+
+  for (const itemId of plan.dueItemIds) {
+    if (completedIds.has(itemId) || reviewableIds.has(itemId)) continue;
+    plan.completedItemIds.push(itemId);
+    completedIds.add(itemId);
+    changed = true;
+  }
+
+  const isComplete = plan.dueItemIds.length > 0
+    && plan.dueItemIds.every((itemId) => completedIds.has(itemId));
+  if (isComplete && !plan.completedAt) {
+    plan.completedAt = completedAt;
+    changed = true;
+  }
+
+  return changed;
 }
 
 function inferLastReviewEvent(items: VocabItem[]): ReviewEvent | undefined {
@@ -2949,7 +3062,7 @@ function needsDefinitionReview(item: VocabItem): boolean {
   if (item.questionQuality) {
     return item.questionQuality.status === "pending-review";
   }
-  return item.lookupQuality === "dictionary" || item.lookupQuality === "reference";
+  return !isTrustedDefinitionQuality(item.lookupQuality);
 }
 
 function inferLegacyQuality(item: VocabItem): Pick<VocabItem, "lookupQuality" | "sourceLabel" | "lookupWarning"> {
@@ -2958,7 +3071,7 @@ function inferLegacyQuality(item: VocabItem): Pick<VocabItem, "lookupQuality" | 
     return {
       lookupQuality: "legal-glossary",
       sourceLabel: "法律术语表",
-      lookupWarning: undefined
+      lookupWarning: "未找到 Oxford / Cambridge / Merriam-Webster 标准词典释义；当前为内置法律术语表释义，请人工确认。"
     };
   }
 
@@ -3167,6 +3280,57 @@ type RemoteDictionaryEntry = {
   }[];
 };
 
+type OxfordDictionaryResponse = {
+  results?: {
+    word?: string;
+    lexicalEntries?: {
+      pronunciations?: {
+        phoneticSpelling?: string;
+        audioFile?: string;
+      }[];
+      entries?: {
+        pronunciations?: {
+          phoneticSpelling?: string;
+          audioFile?: string;
+        }[];
+        senses?: {
+          definitions?: string[];
+          shortDefinitions?: string[];
+        }[];
+      }[];
+    }[];
+  }[];
+};
+
+type MerriamWebsterResponse = Array<{
+  meta?: {
+    id?: string;
+  };
+  hwi?: {
+    hw?: string;
+    prs?: {
+      mw?: string;
+      sound?: {
+        audio?: string;
+      };
+    }[];
+  };
+  shortdef?: string[];
+} | string>;
+
+type CambridgeDictionaryResponse = {
+  entryContent?: string;
+  entryLabel?: string;
+  term?: string;
+  definition?: string;
+  definitions?: string[];
+  entries?: {
+    entryContent?: string;
+    definition?: string;
+    definitions?: string[];
+  }[];
+};
+
 type OpenAIChatResponse = {
   choices?: Array<{
     message?: {
@@ -3202,10 +3366,10 @@ async function fetchOnlineDictionaryEntry(term: string): Promise<DictionaryEntry
     return enrichedCachedEntry;
   }
 
-  const openAIEntry = await fetchOpenAILegalDictionaryEntry(normalizedTerm);
-  if (openAIEntry) {
-    dictionaryLookupCache.set(cacheKey, openAIEntry);
-    return openAIEntry;
+  const standardDictionaryEntry = await fetchStandardDictionaryEntry(normalizedTerm);
+  if (standardDictionaryEntry) {
+    dictionaryLookupCache.set(cacheKey, standardDictionaryEntry);
+    return standardDictionaryEntry;
   }
 
   const directEntry = getBuiltInEntry(normalizedTerm);
@@ -3215,10 +3379,17 @@ async function fetchOnlineDictionaryEntry(term: string): Promise<DictionaryEntry
       chineseDefinition: directEntry.chineseDefinition || getKnownChineseDefinition(normalizedTerm),
       legalNote: directEntry.legalNote || getLegalEnglishNote(normalizedTerm),
       lookupQuality: "legal-glossary" as const,
-      sourceLabel: "法律术语表"
+      sourceLabel: "法律术语表",
+      lookupWarning: getDefaultLookupWarning("legal-glossary")
     };
     dictionaryLookupCache.set(cacheKey, entry);
     return entry;
+  }
+
+  const openAIEntry = await fetchOpenAILegalDictionaryEntry(normalizedTerm);
+  if (openAIEntry) {
+    dictionaryLookupCache.set(cacheKey, openAIEntry);
+    return openAIEntry;
   }
 
   const baseUrl = process.env.DICTIONARY_API_BASE_URL || "https://api.dictionaryapi.dev/api/v2/entries/en";
@@ -3278,6 +3449,180 @@ async function fetchOnlineDictionaryEntry(term: string): Promise<DictionaryEntry
   });
   dictionaryLookupCache.set(cacheKey, entry);
   return entry;
+}
+
+async function fetchStandardDictionaryEntry(term: string): Promise<DictionaryEntry | null> {
+  return await fetchOxfordDictionaryEntry(term)
+    || await fetchCambridgeDictionaryEntry(term)
+    || await fetchMerriamWebsterDictionaryEntry(term);
+}
+
+async function fetchOxfordDictionaryEntry(term: string): Promise<DictionaryEntry | null> {
+  const appId = process.env.OXFORD_APP_ID;
+  const appKey = process.env.OXFORD_APP_KEY;
+  if (!appId || !appKey) return null;
+
+  const language = process.env.OXFORD_LANGUAGE || "en-us";
+  const baseUrl = process.env.OXFORD_API_BASE_URL || "https://od-api.oxforddictionaries.com/api/v2";
+
+  try {
+    const response = await fetchWithTimeout(
+      `${baseUrl}/entries/${encodeURIComponent(language)}/${encodeURIComponent(normalizeOxfordHeadword(term))}`,
+      1800,
+      {
+        headers: {
+          app_id: appId,
+          app_key: appKey
+        }
+      }
+    );
+    if (response.status === 404) return null;
+    if (!response.ok) return null;
+
+    const payload = await response.json() as OxfordDictionaryResponse;
+    const result = payload.results?.[0];
+    const lexicalEntry = result?.lexicalEntries?.[0];
+    const entryBlock = lexicalEntry?.entries?.[0];
+    const definition = entryBlock?.senses
+      ?.flatMap((sense) => sense.definitions ?? sense.shortDefinitions ?? [])
+      .find((candidate) => cleanEnglishDefinition(candidate))
+      ?.trim();
+    if (!definition) return null;
+
+    const pronunciation = entryBlock?.pronunciations?.[0] || lexicalEntry?.pronunciations?.[0];
+    const phonetic = pronunciation?.phoneticSpelling
+      ? `/${pronunciation.phoneticSpelling.replace(/^\/|\/$/g, "")}/`
+      : undefined;
+    const legalNote = getLegalEnglishNote(term);
+
+    return await ensureChineseDefinition({
+      term: result?.word || term,
+      definition,
+      legalContext: legalNote?.contextExplanation,
+      lookupQuality: "oxford",
+      sourceLabel: "Oxford Dictionaries API",
+      phonetic,
+      pronunciation: phonetic,
+      audioUrl: pronunciation?.audioFile,
+      legalNote
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function fetchCambridgeDictionaryEntry(term: string): Promise<DictionaryEntry | null> {
+  const apiKey = process.env.CAMBRIDGE_API_KEY;
+  const dictCode = process.env.CAMBRIDGE_DICT_CODE;
+  if (!apiKey || !dictCode) return null;
+
+  const baseUrl = process.env.CAMBRIDGE_API_BASE_URL || "https://dictionary.cambridge.org/api/v1";
+  const template = process.env.CAMBRIDGE_API_URL_TEMPLATE;
+  const url = template
+    ? template.replace("{term}", encodeURIComponent(term)).replace("{dictCode}", encodeURIComponent(dictCode))
+    : `${baseUrl}/dictionaries/${encodeURIComponent(dictCode)}/searchFirst?q=${encodeURIComponent(term)}&format=json`;
+
+  try {
+    const response = await fetchWithTimeout(url, 1800, {
+      headers: {
+        accessKey: apiKey
+      }
+    });
+    if (response.status === 404) return null;
+    if (!response.ok) return null;
+
+    const payload = await response.json() as CambridgeDictionaryResponse;
+    const definition = extractCambridgeDefinition(payload);
+    if (!definition) return null;
+
+    const legalNote = getLegalEnglishNote(term);
+    return await ensureChineseDefinition({
+      term: payload.term || payload.entryLabel || term,
+      definition,
+      legalContext: legalNote?.contextExplanation,
+      lookupQuality: "cambridge",
+      sourceLabel: "Cambridge Dictionary API",
+      legalNote
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function fetchMerriamWebsterDictionaryEntry(term: string): Promise<DictionaryEntry | null> {
+  const apiKey = process.env.MERRIAM_WEBSTER_API_KEY;
+  if (!apiKey) return null;
+
+  const baseUrl = process.env.MERRIAM_WEBSTER_API_BASE_URL
+    || "https://www.dictionaryapi.com/api/v3/references/collegiate/json";
+
+  try {
+    const response = await fetchWithTimeout(`${baseUrl}/${encodeURIComponent(term)}?key=${encodeURIComponent(apiKey)}`, 1800);
+    if (response.status === 404) return null;
+    if (!response.ok) return null;
+
+    const payload = await response.json() as MerriamWebsterResponse;
+    const firstEntry = payload.find((candidate): candidate is Exclude<typeof candidate, string> =>
+      typeof candidate === "object"
+      && Array.isArray(candidate.shortdef)
+      && candidate.shortdef.some((definition) => cleanEnglishDefinition(definition))
+    );
+    const definition = firstEntry?.shortdef?.find((candidate) => cleanEnglishDefinition(candidate))?.trim();
+    if (!firstEntry || !definition) return null;
+
+    const pronunciation = firstEntry.hwi?.prs?.[0]?.mw;
+    const phonetic = pronunciation ? `/${pronunciation.replace(/^\/|\/$/g, "")}/` : undefined;
+    const legalNote = getLegalEnglishNote(term);
+
+    return await ensureChineseDefinition({
+      term: (firstEntry.hwi?.hw || firstEntry.meta?.id || term).replace(/\*/g, ""),
+      definition,
+      legalContext: legalNote?.contextExplanation,
+      lookupQuality: "merriam-webster",
+      sourceLabel: "Merriam-Webster Dictionary API",
+      phonetic,
+      pronunciation: phonetic,
+      legalNote
+    });
+  } catch {
+    return null;
+  }
+}
+
+function normalizeOxfordHeadword(term: string): string {
+  return normalizeTerm(term).replace(/\s+/g, "_");
+}
+
+function extractCambridgeDefinition(payload: CambridgeDictionaryResponse): string | undefined {
+  const directCandidates = [
+    payload.definition,
+    ...(payload.definitions ?? []),
+    ...(payload.entries?.flatMap((entry) => [entry.definition, ...(entry.definitions ?? [])]) ?? [])
+  ];
+  const direct = directCandidates.find((candidate) => candidate && cleanEnglishDefinition(candidate));
+  if (direct) return direct.trim();
+
+  const html = payload.entryContent || payload.entries?.find((entry) => entry.entryContent)?.entryContent;
+  if (!html) return undefined;
+
+  const text = stripHtml(html)
+    .split(/\s*(?:\n|;|•)\s*/)
+    .map((candidate) => candidate.trim())
+    .find((candidate) => cleanEnglishDefinition(candidate));
+  return text;
+}
+
+function stripHtml(value: string): string {
+  return value
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 async function fetchOpenAILegalDictionaryEntry(term: string): Promise<DictionaryEntry | null> {

@@ -25,7 +25,7 @@ type VocabLookupResult = {
   definition: string;
   chineseDefinition?: string;
   legalContext?: string;
-  lookupQuality?: "ai-legal" | "legal-glossary" | "saved" | "reference" | "dictionary";
+  lookupQuality?: "oxford" | "cambridge" | "merriam-webster" | "ai-legal" | "legal-glossary" | "saved" | "reference" | "dictionary";
   sourceLabel?: string;
   lookupWarning?: string;
   phonetic?: string;
@@ -497,7 +497,7 @@ function showLookupPanel(data: {
   chineseDefinition?: string;
   definition?: string;
   legalContext?: string;
-  lookupQuality?: "ai-legal" | "legal-glossary" | "saved" | "reference" | "dictionary";
+  lookupQuality?: "oxford" | "cambridge" | "merriam-webster" | "ai-legal" | "legal-glossary" | "saved" | "reference" | "dictionary";
   sourceLabel?: string;
   lookupWarning?: string;
   status: string;
@@ -673,7 +673,12 @@ function createStatusBlock(text: string, isError: boolean, isWarning = false): H
   return status;
 }
 
-function formatLookupQuality(quality: "ai-legal" | "legal-glossary" | "saved" | "reference" | "dictionary"): string {
+function formatLookupQuality(
+  quality: "oxford" | "cambridge" | "merriam-webster" | "ai-legal" | "legal-glossary" | "saved" | "reference" | "dictionary"
+): string {
+  if (quality === "oxford") return "Oxford 标准词典";
+  if (quality === "cambridge") return "Cambridge 标准词典";
+  if (quality === "merriam-webster") return "Merriam-Webster 标准词典";
   if (quality === "ai-legal") return "AI 法律释义";
   if (quality === "legal-glossary") return "法律词典";
   if (quality === "saved") return "已保存";
@@ -688,7 +693,10 @@ function formatSourceLabel(label: string): string {
     "Built-in legal glossary": "法律术语表",
     "Legal glossary": "法律术语表",
     "Reference fallback": "参考资料",
-    "AI legal dictionary": "AI 法律词典"
+    "AI legal dictionary": "AI 法律词典",
+    "Oxford Dictionaries API": "Oxford 标准词典",
+    "Cambridge Dictionary API": "Cambridge 标准词典",
+    "Merriam-Webster Dictionary API": "Merriam-Webster 标准词典"
   }[label] ?? label;
 }
 
@@ -697,7 +705,11 @@ function formatLookupWarning(warning: string): string {
     "This old entry looks like a reference summary or non-legal result. Review before using it in quizzes.": "这个旧词条可能是参考摘要或非法律释义，请确认后再用于测试。",
     "This old entry was saved before quality tracking. Review its legal meaning before relying on it.": "这个旧词条保存于质量检查启用之前，请确认其法律含义。",
     "This is a fallback definition. Legal meaning may need AI legal lookup.": "当前为备用释义，法律含义可能需要进一步检索确认。",
-    "This is a reference summary, not a concise dictionary definition.": "当前内容是参考摘要，并非精炼的词典释义。"
+    "This is a reference summary, not a concise dictionary definition.": "当前内容是参考摘要，并非精炼的词典释义。",
+    "未找到 Oxford / Cambridge / Merriam-Webster 标准词典释义；当前为备用释义，请人工确认后再进入正式复习。": "未找到 Oxford / Cambridge / Merriam-Webster 标准词典释义；当前为备用释义，请人工确认后再进入正式复习。",
+    "未找到 Oxford / Cambridge / Merriam-Webster 标准词典释义；当前内容是参考摘要，并非精炼的词典释义，请人工确认。": "未找到 Oxford / Cambridge / Merriam-Webster 标准词典释义；当前内容是参考摘要，并非精炼的词典释义，请人工确认。",
+    "未找到 Oxford / Cambridge / Merriam-Webster 标准词典释义；当前为 AI 辅助释义，请人工确认。": "未找到 Oxford / Cambridge / Merriam-Webster 标准词典释义；当前为 AI 辅助释义，请人工确认。",
+    "未找到 Oxford / Cambridge / Merriam-Webster 标准词典释义；当前为内置法律术语表释义，请人工确认。": "未找到 Oxford / Cambridge / Merriam-Webster 标准词典释义；当前为内置法律术语表释义，请人工确认。"
   }[warning] ?? warning;
 }
 
